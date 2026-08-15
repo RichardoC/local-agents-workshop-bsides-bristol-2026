@@ -172,6 +172,40 @@ short system prompt — both push the wall further away.
 - Keep tool output small. `phish_triage` returns roughly twenty facts rather than
   the raw email precisely so that a session lasts.
 
+### The other long-session failure: repeated identical requests
+
+There is a second, separate way depth breaks things, and this one is what people
+usually mean when they say the agent "started looping".
+
+pi gives each request 300 seconds. Prompt processing on a slow machine runs at a
+few tokens per second, so a deep conversation takes far longer than that to
+evaluate — we measured a cold 12k-token prompt at 3.5 tokens/second, still only
+49% processed after 19 minutes. The request is abandoned at 300s, the identical
+request goes out again, and it fails at exactly the same point. Four attempts,
+about 1216 seconds, then `Request timed out`.
+
+From the outside this looks exactly like an agent stuck in a loop: the same work,
+over and over, no progress. It is not the model, and it is not the sampler —
+turning up `repeat_penalty` does nothing for it (we tried).
+
+The critical detail is **cold versus warm**. With `-np 1` and the server left
+running, each turn only evaluates the *new* tokens, which stays comfortably under
+the timeout. Everything that forces a full re-evaluation is dangerous on a slow
+machine:
+
+- resuming or forking a deep session (`--continue`, `--resume`, `--fork`)
+- restarting the model server, which discards the cache
+- anything that evicts the prefix, which is what multiple slots do — hence `-np 1`
+
+The timeout itself is not configurable: nothing in pi's settings, `models.json`
+or any environment variable exposes it. So the only levers are the ones that keep
+evaluation short — a warm cache, a smaller context, `/compact`, and faster
+hardware.
+
+On a laptop with a working GPU this may never appear: at 100+ tokens/second a 12k
+prompt is roughly thirty seconds, nowhere near the limit. It is very much a
+slow-machine failure, which is why it can look intermittent across a room.
+
 **`-np 1`.** llamafile defaults to four parallel slots and hands each request to
 whichever is free. An agent makes a sequence of calls that share a growing
 prefix, so bouncing between slots throws away the KV cache and reprocesses the
