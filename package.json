@@ -12,8 +12,7 @@
     "llamafile"
   ],
   "pi": {
-    "extensions": ["./extensions"],
-    "skills": ["./skills"]
+    "extensions": ["./extensions"]
   },
   "scripts": {
     "test": "node --experimental-strip-types --test extensions/lib/*.test.ts"
