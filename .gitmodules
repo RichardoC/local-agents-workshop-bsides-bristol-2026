@@ -1,0 +1,3 @@
+[submodule "samples/phishing_pot"]
+	path = samples/phishing_pot
+	url = https://github.com/rf-peixoto/phishing_pot
