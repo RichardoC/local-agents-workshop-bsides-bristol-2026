@@ -126,16 +126,51 @@ completely broken.
 The `-c` value must match `contextWindow` in `.pi/agent/models.json`; both are
 16384 here. Change one, change the other.
 
-The same arithmetic bites again later in a long session: once a conversation has
-used about 12k tokens, the room left for a reply shrinks toward that floor of 1
-and replies go quiet again. If the agent suddenly stops answering after a
-productive half hour, that is what happened — start a fresh session rather than
-hunting for a bug. Keeping tool output compact, as `phish_triage` does, buys you
-a lot of runway here.
-
 There is no way to make pi omit the limit entirely: it is always sent, and the
 one code path that skips the clamp requires `contextWindow: 0`, which the config
 loader rejects outright as invalid.
+
+### The same arithmetic kills long sessions
+
+This is worth understanding properly, because it is the single most confusing
+thing you are likely to hit, and it arrives after everything has been working
+fine for half an hour.
+
+The allowance shrinks as the conversation grows. We measured what pi actually
+sends, against sessions built at known depths on a 16384-token window:
+
+| Conversation depth | Reply allowance sent | What you see |
+|---|---|---|
+| 2,000 | 6,888 | fine |
+| 7,974 | 4,290 | fine |
+| 10,861 | 1,403 | fine |
+| 11,962 | **302** | long answers cut off mid-sentence |
+| 12,978 | **1** | **nothing at all** |
+
+It is a straight line, not a cliff edge you can feel coming: allowance is
+`contextWindow − depth − 4096 − overhead`, and it simply runs out. At the bottom
+the agent returns an empty response and **exit code 0** — a success, with no
+output and no error.
+
+Depth is not measured from the text, incidentally. pi reads `usage.totalTokens`
+off the last assistant message in the session file, so it is a recorded number
+rather than a recount.
+
+**Where the wall sits depends on your overhead.** With a lean setup it is around
+three-quarters of the window; with pi's full default system prompt and every
+built-in tool schema in play, the fixed overhead is larger and the wall arrives
+closer to two-thirds. That is one more reason the launcher uses `-nbt` and a
+short system prompt — both push the wall further away.
+
+**What to do about it:**
+
+- `/compact` when replies start getting shorter. Compaction is manual — nothing
+  triggers it automatically, and you get no warning as you approach the limit.
+- Start a fresh session between unrelated jobs. Cheap, and it resets the depth.
+- Raise `-c` and `contextWindow` together if you have the RAM. Every extra token
+  of window is an extra token of runway.
+- Keep tool output small. `phish_triage` returns roughly twenty facts rather than
+  the raw email precisely so that a session lasts.
 
 **`-np 1`.** llamafile defaults to four parallel slots and hands each request to
 whichever is free. An agent makes a sequence of calls that share a growing
