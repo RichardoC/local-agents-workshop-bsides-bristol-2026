@@ -111,12 +111,31 @@ workshop is gone.
 Three of these were found the hard way. Each one fails silently rather than with
 an error message, which is exactly why they are worth knowing.
 
-**`-c 16384`.** pi subtracts a fixed 4096-token safety margin when working out
-how much room is left for a reply. If the model's declared context window is
-*also* 4096, the arithmetic leaves room for exactly **one token** — so the model
-emits a single token, stops, and pi prints *nothing at all*, with no error. It
-looks completely broken. The `-c` value must match `contextWindow` in
-`.pi/agent/models.json`; both are 16384 here. Change one, change the other.
+**`-c 16384`.** pi decides how many tokens the model may reply with using:
+
+```
+room for the reply = contextWindow - (tokens used so far) - 4096
+```
+
+That 4096 is a fixed safety margin in pi, and the result is floored at **1**, not
+at zero. So if the declared context window is *also* 4096, the sum is negative,
+the floor kicks in, and the model is told it may emit exactly one token. It emits
+one, stops, and pi prints *nothing at all* — no error, no warning. It looks
+completely broken.
+
+The `-c` value must match `contextWindow` in `.pi/agent/models.json`; both are
+16384 here. Change one, change the other.
+
+The same arithmetic bites again later in a long session: once a conversation has
+used about 12k tokens, the room left for a reply shrinks toward that floor of 1
+and replies go quiet again. If the agent suddenly stops answering after a
+productive half hour, that is what happened — start a fresh session rather than
+hunting for a bug. Keeping tool output compact, as `phish_triage` does, buys you
+a lot of runway here.
+
+There is no way to make pi omit the limit entirely: it is always sent, and the
+one code path that skips the clamp requires `contextWindow: 0`, which the config
+loader rejects outright as invalid.
 
 **`-np 1`.** llamafile defaults to four parallel slots and hands each request to
 whichever is free. An agent makes a sequence of calls that share a growing
