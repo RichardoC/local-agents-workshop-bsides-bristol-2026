@@ -141,3 +141,14 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# --- workshop additions ---
+
+# pi writes runtime state into the agent dir; only models.json is committed.
+.pi/agent/sessions/
+.pi/agent/models-store.json
+.pi/agent/trust.json
+.pi/agent/auth.json
+
+# The model itself is ~1.5GB. Download it, don't commit it.
+*.llamafile

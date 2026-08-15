@@ -16,13 +16,35 @@
  * href" will write you an accurate, readable verdict. Do the parsing yourself.
  */
 
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 import { parseEmail } from "./lib/eml.ts";
 import { triage, type Triage } from "./lib/signals.ts";
+
+/**
+ * Directories to fall back to when a bare filename is given.
+ *
+ * Small local models routinely drop the directory part of a path — they see
+ * "sample-1004.eml" in the conversation and pass that, not the full relative
+ * path. Rather than burn a slow round-trip on a retry, resolve the obvious
+ * candidates ourselves and say which one we used.
+ */
+const FALLBACK_DIRS = ["samples/phishing_pot/email", "samples", "."];
+
+function resolveEmlPath(input: string): string | undefined {
+  if (existsSync(input) && statSync(input).isFile()) return input;
+
+  const name = basename(input);
+  for (const dir of FALLBACK_DIRS) {
+    const candidate = join(dir, name);
+    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+  }
+  return undefined;
+}
 
 /**
  * Render the triage result as compact labelled text.
@@ -94,30 +116,43 @@ export default function (pi: ExtensionAPI) {
       "authentication results, links and attachments deterministically, then " +
       "returns the findings for you to interpret. Use this whenever the user " +
       "asks about a suspicious email, or points at a .eml file.",
+    promptSnippet: "phish_triage: analyse a .eml file for phishing indicators",
+    promptGuidelines: [
+      "When the user names a .eml file, call phish_triage with the path exactly as they wrote it.",
+      "Base your verdict only on the signals the tool returns. Do not invent header values.",
+      "If the tool returns no signals, say the message looks unremarkable rather than inventing concerns.",
+    ],
     parameters: Type.Object({
       path: Type.String({
-        description: "Path to the .eml file to analyse.",
+        description:
+          "Path to the .eml file to analyse, as the user wrote it (relative to the current directory).",
       }),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
       const { path } = params as { path: string };
 
+      const resolved = resolveEmlPath(path);
+      if (!resolved) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No such .eml file: ${path}. Give a path relative to the current directory.`,
+            },
+          ],
+          details: { error: "not_found" },
+        };
+      }
+
       let raw: Buffer;
       try {
-        const stat = statSync(path);
-        if (!stat.isFile()) {
-          return {
-            content: [{ type: "text" as const, text: `Not a file: ${path}` }],
-            details: { error: "not_a_file" },
-          };
-        }
-        raw = readFileSync(path);
+        raw = readFileSync(resolved);
       } catch (err) {
         return {
           content: [
             {
               type: "text" as const,
-              text: `Could not read ${path}: ${(err as Error).message}`,
+              text: `Could not read ${resolved}: ${(err as Error).message}`,
             },
           ],
           details: { error: "unreadable" },
@@ -125,9 +160,11 @@ export default function (pi: ExtensionAPI) {
       }
 
       const result = triage(parseEmail(raw));
+      const note =
+        resolved === path ? "" : `\n(Resolved "${path}" to ${resolved}.)`;
 
       return {
-        content: [{ type: "text" as const, text: render(result, path) }],
+        content: [{ type: "text" as const, text: render(result, resolved) + note }],
         details: result as unknown as Record<string, unknown>,
       };
     },
@@ -138,15 +175,20 @@ export default function (pi: ExtensionAPI) {
     handler: async (args: string, ctx: any) => {
       const path = args.trim();
       if (!path) {
-        ctx.ui.notify("Usage: /phish <path-to-eml>", "warn");
+        ctx.ui.notify("Usage: /phish <path-to-eml>", "warning");
+        return;
+      }
+      const resolved = resolveEmlPath(path);
+      if (!resolved) {
+        ctx.ui.notify(`No such .eml file: ${path}`, "error");
         return;
       }
       try {
-        const result = triage(parseEmail(readFileSync(path)));
+        const result = triage(parseEmail(readFileSync(resolved)));
         const high = result.signals.filter((s) => s.severity === "high").length;
         ctx.ui.notify(
           `${result.signals.length} signal(s), ${high} high severity — ${result.subject || "(no subject)"}`,
-          high > 0 ? "warn" : "info",
+          high > 0 ? "warning" : "info",
         );
       } catch (err) {
         ctx.ui.notify(`Failed: ${(err as Error).message}`, "error");

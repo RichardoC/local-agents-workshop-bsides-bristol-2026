@@ -1,0 +1,30 @@
+{
+  "providers": {
+    "local": {
+      "name": "Local llamafile",
+      "baseUrl": "http://127.0.0.1:8080/v1",
+      "apiKey": "no-key-needed",
+      "api": "openai-completions",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {
+          "id": "bonsai-8b",
+          "name": "Bonsai 8B (llamafile)",
+          "contextWindow": 16384,
+          "maxTokens": 4096,
+          "input": ["text"],
+          "samplingParams": {
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "top_k": 40,
+            "repeat_penalty": 1.05
+          },
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    }
+  }
+}
