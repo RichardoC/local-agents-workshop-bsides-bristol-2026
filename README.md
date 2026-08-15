@@ -1,0 +1,1 @@
+# local-agents-workshop-bsides-2026
