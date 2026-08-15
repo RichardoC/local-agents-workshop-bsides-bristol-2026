@@ -151,6 +151,28 @@ If the agent seems to hang, check `NO_PROXY` includes `127.0.0.1` — a corporat
 proxy will otherwise intercept requests to your own machine. The wrapper scripts
 set this for you.
 
+### Sampling
+
+pi sends no sampling parameters unless you set them, in which case the server's
+defaults apply. They are pinned in `.pi/agent/models.json`:
+
+```json
+"samplingParams": { "temperature": 0.2, "top_p": 0.9, "top_k": 40, "repeat_penalty": 1.05 }
+```
+
+Low temperature because we want the model reporting findings, not improvising
+around them.
+
+`repeat_penalty` is worth a note, because raising it is the obvious guess when an
+agent starts looping and it is the wrong lever. We tested 1.05, 1.15 and 1.30
+with the built-in tools enabled: all three answered correctly in two turns, and
+the wall-clock differences turned out to be a cold-versus-warm cache artifact —
+re-running the 1.05 baseline with a warm cache matched the 1.30 time to within a
+few seconds. Repetition penalties only look back a limited window (64 tokens by
+default), so they cannot see a previous tool call on the other side of a tool
+result. If your agent loops, fix the system prompt and check `-np 1`; leave the
+sampler alone.
+
 ### On speed
 
 The workshop machines will be faster than the one this was built on. The figures

@@ -14,7 +14,7 @@
           "id": "bonsai-8b",
           "name": "Bonsai 8B (llamafile)",
           "contextWindow": 16384,
-          "maxTokens": 4096,
+          "maxTokens": 8192,
           "input": ["text"],
           "samplingParams": {
             "temperature": 0.2,
