@@ -72,7 +72,7 @@ Then check it starts:
 Two terminals. In the first, start the model server and leave it running:
 
 ```bash
-./bonsai.llamafile --server --gpu disable -c 16384
+./bonsai.llamafile --server --gpu disable -c 16384 -np 1
 ```
 
 In the second, start the agent:
@@ -88,6 +88,17 @@ Then ask it something:
 Is samples/phishing_pot/email/sample-1004.eml a phishing email?
 ```
 
+You should get back something along these lines — the agent calls the tool, and
+writes its verdict from the signals that come back:
+
+> The email file `samples/phishing_pot/email/sample-1004.eml` contains several
+> phishing indicators. The **reply-to** address is mismatched with the **from**
+> address, which is a red flag as replies typically leave the sender's domain.
+> Additionally, the **SPF** record is marked as **softfail**, and the **DMARC**
+> record is **fail**, indicating potential issues with email authentication.
+
+Every claim there traces back to a deterministic check. Nothing was guessed.
+
 The wrapper script uses the model configuration committed in this repository
 (`.pi/agent/models.json`) rather than anything in your home directory, so it
 does not disturb an existing pi setup. Delete the folder and every trace of the
@@ -95,15 +106,24 @@ workshop is gone.
 
 ---
 
-## Two flags that are not optional
+## The flags that are not optional
 
-**`-c 16384`.** pi reserves a fixed 4096-token safety margin when working out how
-much room is left for a reply. If the model's declared context window is also
-4096, the arithmetic leaves room for exactly **one token** — so the model emits a
-single token and stops, and pi prints *nothing at all*, with no error message.
-It looks completely broken. The context size you pass to `--gpu`/`-c` must match
-`contextWindow` in `.pi/agent/models.json`; both are 16384 here. If you change
-one, change the other.
+Three of these were found the hard way. Each one fails silently rather than with
+an error message, which is exactly why they are worth knowing.
+
+**`-c 16384`.** pi subtracts a fixed 4096-token safety margin when working out
+how much room is left for a reply. If the model's declared context window is
+*also* 4096, the arithmetic leaves room for exactly **one token** — so the model
+emits a single token, stops, and pi prints *nothing at all*, with no error. It
+looks completely broken. The `-c` value must match `contextWindow` in
+`.pi/agent/models.json`; both are 16384 here. Change one, change the other.
+
+**`-np 1`.** llamafile defaults to four parallel slots and hands each request to
+whichever is free. An agent makes a sequence of calls that share a growing
+prefix, so bouncing between slots throws away the KV cache and reprocesses the
+entire conversation every turn. With one slot the cache is reused: in our
+testing the second turn went from reprocessing 1149 tokens to processing 307 new
+ones. On a laptop that is the difference between snappy and apparently frozen.
 
 **`--gpu disable`.** Only needed if the server crashes on startup with a Vulkan
 or driver error. If your GPU works, leave it off and enjoy the speed.
@@ -111,6 +131,14 @@ or driver error. If your GPU works, leave it off and enjoy the speed.
 If the agent seems to hang, check `NO_PROXY` includes `127.0.0.1` — a corporate
 proxy will otherwise intercept requests to your own machine. The wrapper scripts
 set this for you.
+
+### On speed
+
+The workshop machines will be faster than the one this was built on. The figures
+above come from a 4-core cloud VM with no GPU managing about 3.7 tokens/second of
+prompt processing; a laptop with Metal or a modern GPU is typically one to two
+orders of magnitude quicker. If a first response takes a while, that is prompt
+processing, not a hang — watch the server terminal and you will see it counting.
 
 ---
 

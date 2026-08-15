@@ -24,7 +24,7 @@ export no_proxy="$NO_PROXY"
 if ! curl -sf --noproxy 127.0.0.1 http://127.0.0.1:8080/health > /dev/null 2>&1; then
   echo "The model server is not responding on http://127.0.0.1:8080" >&2
   echo "Start it first, in another terminal:" >&2
-  echo "  ./bonsai.llamafile --server --gpu disable -c 16384" >&2
+  echo "  ./bonsai.llamafile --server --gpu disable -c 16384 -np 1" >&2
   exit 1
 fi
 
@@ -40,7 +40,12 @@ done
 # pi's default system prompt is written for large cloud models: it is long, and
 # on a small local model it both costs a lot of prompt-processing time and tends
 # to send the agent looping. A short, task-focused prompt works far better here.
+# -nbt disables pi's built-in Read/Write/Edit/Bash tools while keeping extension
+# tools. Their definitions are a large part of the prompt, and on a slow local
+# model that cost is paid on every turn; a small model also tends to reach for
+# them instead of answering. Drop the flag if you want the full coding agent.
 exec pi \
   --provider local --model bonsai-8b \
   --system-prompt "$(cat workshop-system-prompt.md)" \
+  -nbt \
   "${ext_args[@]}" "$@"

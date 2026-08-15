@@ -27,7 +27,7 @@ catch {
     Write-Error @"
 The model server is not responding on http://127.0.0.1:8080
 Start it first, in another terminal:
-  .\bonsai.llamafile --server --gpu disable -c 16384
+  .\bonsai.llamafile --server --gpu disable -c 16384 -np 1
 "@
     exit 1
 }
@@ -45,4 +45,8 @@ Get-ChildItem -Path "extensions" -Filter "*.ts" -File -ErrorAction SilentlyConti
 # to send the agent looping. A short, task-focused prompt works far better here.
 $systemPrompt = Get-Content -Path "workshop-system-prompt.md" -Raw
 
-& pi --provider local --model bonsai-8b --system-prompt $systemPrompt @extArgs @args
+# -nbt disables pi's built-in Read/Write/Edit/Bash tools while keeping extension
+# tools. Their definitions are a large part of the prompt, and on a slow local
+# model that cost is paid on every turn; a small model also tends to reach for
+# them instead of answering. Drop the flag if you want the full coding agent.
+& pi --provider local --model bonsai-8b --system-prompt $systemPrompt -nbt @extArgs @args
