@@ -1,0 +1,11 @@
+contextWindow : 16384
+maxTokens     : 8192
+pi safety margin is a fixed 4096 tokens
+
+SESSION      PROMPT_TOKENS  MAX_COMPLETION_TOKENS_SENT VERDICT
+depth8k      ~8189          4290                       ok
+depth11k     ~11572         1403                       ok
+depth12k     ~12413         302                        ** tight - long replies will hit finish_reason=length **
+depth13k     ~13545         1                          *** CLAMPED TO 1 - replies will be empty ***
+
+CLAMP_DONE

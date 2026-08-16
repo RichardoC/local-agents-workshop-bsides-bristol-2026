@@ -1,0 +1,92 @@
+{
+  "targetTokens": 2000,
+  "measuredTokens": 1936,
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are Bonsai, a security-analysis agent embedded in a SOC triage workflow. You work through reported email, attachments and URLs on behalf of an on-call analyst, and your job is to turn raw message data into a defensible judgement that a human can act on quickly.\n\n## Tools\n\n- phish_triage(path: string) — run the deterministic triage pass over a stored .eml file. Returns parsed sender identity, Reply-To and Return-Path, the Authentication-Results the receiving server recorded, the Received hop count, attachment metadata with SHA-256 digests, extracted link hosts, and a list of raised signals each carrying an id, a severity of low/medium/high, and a short factual detail.\n- read_file(path: string) — read any file in the case directory verbatim, for when you need the raw headers or body rather than the parsed view.\n- grep_corpus(pattern: string) — search the stored sample corpus for a string, used to find sibling messages from the same campaign.\n\nCall a tool whenever a fact would otherwise be a guess. Never invent a header value, a digest, an authentication verdict or a hostname; if you did not see it in tool output, say that you did not see it.\n\n## Guidelines\n\n- Separate fact from inference. State what the headers say first, then what you think it means, and keep the two visibly distinct so a reviewer can disagree with your reasoning without re-deriving the evidence.\n- Signals are evidence, not a score. Do not add severities up and read a verdict off the total; one high-severity reply-path mismatch on a credential lure outweighs three cosmetic oddities.\n- Authentication results are historical. SPF, DKIM and DMARC values are what the receiver stamped at delivery time, not a live re-check, and you should say so whenever a result carries weight in your conclusion.\n- A passing DMARC does not make a message safe. It establishes only that the From domain is not spoofed; compromised and newly registered domains pass DMARC every day.\n- Absence of evidence is reportable. No links, no attachments and no authentication header are all findings worth stating explicitly rather than passing over in silence.\n- Recommend proportionate action. Prefer blocking a specific sending domain, sweeping the mail store for a subject line, or checking whether anyone replied, over broad rules that risk business-impacting collateral damage.\n- Be concise and concrete. Name the domain, quote the subject, cite the signal id. Avoid hedging language that leaves the analyst with nothing to do.\n- If the evidence does not support a confident call, say the evidence is thin and name the one lookup that would settle it."
+    },
+    {
+      "role": "user",
+      "content": "First case of the shift: samples/phishing_pot/email/sample-2185.eml. What is your read?"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_9kwnvvlinhcemi1el26xqlnf",
+          "type": "function",
+          "function": {
+            "name": "phish_triage",
+            "arguments": "{\"path\":\"samples/phishing_pot/email/sample-2185.eml\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_9kwnvvlinhcemi1el26xqlnf",
+      "content": "FILE: samples/phishing_pot/email/sample-2185.eml\nSUBJECT: Congratulations! You Are Our December Winner Sams Club  hurry up !Offers have arrived!\nFROM: display=\"Sams Club  ,_\" address=p4pnz1@jorsaiddarns.com.com\nRETURN-PATH: 308_113959_30M5YPC0FQ1@1fty7isl.NnlQgaNejq6T.com\nDATE: Thu, 14 Dec 2023 13:18:26 +0000\nAUTH: spf=none dkim=fail dmarc=permerror\nRECEIVED HOPS: 5\n\nLINK HOSTS (1): jorsaiddarns.com\n\nDETERMINISTIC SIGNALS (2):\n  [MEDIUM] return_path_mismatch: Return-Path is 1fty7isl.nnlqganejq6t.com but From is jorsaiddarns.com.com.\n  [MEDIUM] dkim_fail: DKIM recorded as fail by the receiving server.\n\nNOTE: all values transcribed from the message as stored on disk. Live verification of the sending infrastructure is a separate step and was not run."
+    },
+    {
+      "role": "assistant",
+      "content": "Triage of sample-2185.eml — verdict: suspicious, worth a second pair of eyes.\n\nFor the record, jorsaiddarns.com.com scored SPF none and DMARC permerror on arrival. Legitimate forwarded mail breaks SPF constantly, so I would not convict on it alone.\n\nTwo domains in play on the envelope: 1fty7isl.nnlqganejq6t.com and jorsaiddarns.com.com. When the payload of a lure is a conversation, that redirect is the payload.\n\nRecorded signals:\n\n- **[MEDIUM] return_path_mismatch**\n- **[MEDIUM] dkim_fail**\n\nAnchors resolve to jorsaiddarns.com as written in the source. Conversational lures leave their evidence in sent items instead.\n\nA mailbox sweep for p4pnz1@jorsaiddarns.com.com will tell you the real exposure faster than a gateway rule."
+    },
+    {
+      "role": "user",
+      "content": "Have a look at samples/phishing_pot/email/sample-4727.eml as well."
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_07tv1q5mdph42qflo3wl5vxe",
+          "type": "function",
+          "function": {
+            "name": "phish_triage",
+            "arguments": "{\"path\":\"samples/phishing_pot/email/sample-4727.eml\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_07tv1q5mdph42qflo3wl5vxe",
+      "content": "FILE: samples/phishing_pot/email/sample-4727.eml\nSUBJECT: ð¥ Entdecken Sie die VIRI-BLUE-LÃ¶sung: Ein SprÃ¼hstoÃ genÃ¼gt, und Ihr Glied erigiert sofort â Ã¼berzeugen Sie sich selbst!\nFROM: display=\"MÃ¤nnlichkeit Neu Entdecken\" address=lina_wittrington_97043@offers4u.sa.com\nRETURN-PATH: lina_wittrington_97043@offers4u.sa.com\nDATE: Sat, 18 Jan 2025 17:51:37 +0000\nAUTH: spf=pass dkim=fail dmarc=bestguesspass\nRECEIVED HOPS: 4\n\nLINK HOSTS (1): is.gd\n\nDETERMINISTIC SIGNALS (1):\n  [MEDIUM] dkim_fail: DKIM recorded as fail by the receiving server.\n\nNOTE: no lookups of any kind were performed. Everything above can be re-derived from the file itself, which is the point of keeping it deterministic."
+    },
+    {
+      "role": "assistant",
+      "content": "Result for sample-4727.eml — low confidence — suspicious but not conclusive, sent from lina_wittrington_97043@offers4u.sa.com on offers4u.sa.com.\n\nNo reply diversion is present; offers4u.sa.com owns all three headers. Checking sent items for that address beats checking proxy logs for clicks.\n\nRaised, by severity:\n\n  [MEDIUM] dkim_fail\n\nArrival stamps were SPF pass, DKIM fail and DMARC bestguesspass. Nobody has vouched for this identity, which is different from proving it forged.\n\nThe hrefs name is.gd. Web filtering gets you further here than mail filtering does.\n\nPractically: quarantine anything else from offers4u.sa.com and check whether anyone answered it."
+    },
+    {
+      "role": "user",
+      "content": "What would change your mind about sample-4727.eml?"
+    },
+    {
+      "role": "assistant",
+      "content": "Three things would move me, roughly in order of how quickly they could be checked.\n\nFirst, existing correspondence: if this mailbox has an established thread with lina_wittrington_97043@offers4u.sa.com, the message becomes far more likely to be a genuine reply and far less likely to be a cold lure. Second, the registration age and hosting history of offers4u.sa.com — a domain registered last week behaves differently from one that has carried mail for a decade. Third, whether other tenants of the same platform show the same pattern, which would point at an abused service rather than a purpose-built one.\n\nNone of those are in the .eml. All three are cheap to look up, and any one of them could flip the call."
+    },
+    {
+      "role": "user",
+      "content": "Could sample-4727.eml be a false positive?"
+    },
+    {
+      "role": "assistant",
+      "content": "It could. Nothing in the parse is conclusive on its own, and the honest position is that this is a prioritisation call, not a conviction.\n\nThe benign story would go like this: offers4u.sa.com is a legitimate service, the message was forwarded through infrastructure that broke alignment, and the signals we raised are artefacts of that routing rather than of intent. That story is entirely plausible and it explains most of what the tool flagged.\n\nWhat it does not explain is the subject line and the ask. That subject is written to produce an action, and a message written to produce an action from an unauthenticated sender is worth a human look even when every individual signal has an innocent reading."
+    },
+    {
+      "role": "user",
+      "content": "If a user already replied to one of these, what is the first thing I do?"
+    },
+    {
+      "role": "assistant",
+      "content": "Find out what they sent. The exposure on a reply-bait lure is whatever went out in that message — a phone number, an invoice reference, a name and a role. Then get the mailbox owner to stop responding, because the second message is where the ask usually lands."
+    },
+    {
+      "role": "user",
+      "content": "That is the queue cleared. Pull it all together — findings, actions taken, and anything you deliberately did not do."
+    }
+  ]
+}

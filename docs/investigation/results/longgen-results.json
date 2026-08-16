@@ -1,0 +1,46 @@
+[
+ {
+  "label": "temp0.2-rp1.05-PI-CURRENT",
+  "params": {
+   "temperature": 0.2,
+   "top_p": 0.9,
+   "top_k": 40,
+   "repeat_penalty": 1.05
+  },
+  "status": 0,
+  "secs": 301,
+  "finish": null,
+  "error": "fetch failed",
+  "metrics": null,
+  "text": ""
+ },
+ {
+  "label": "temp0.2-rp1.05-PI-CURRENT#2",
+  "params": {
+   "temperature": 0.2,
+   "top_p": 0.9,
+   "top_k": 40,
+   "repeat_penalty": 1.05
+  },
+  "status": 0,
+  "secs": 301,
+  "finish": null,
+  "error": "fetch failed",
+  "metrics": null,
+  "text": ""
+ },
+ {
+  "label": "temp0.6-cardrec",
+  "params": {
+   "temperature": 0.6,
+   "top_p": 0.9,
+   "top_k": 20
+  },
+  "status": 0,
+  "secs": 301,
+  "finish": null,
+  "error": "fetch failed",
+  "metrics": null,
+  "text": ""
+ }
+]
