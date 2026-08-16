@@ -170,22 +170,49 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  /**
+   * `/phish <file>` — the same analysis, with the model left out entirely.
+   *
+   * This is not merely a convenience. It is the fallback for anyone whose model
+   * will not start: the deterministic half of this workshop is the half that
+   * does the work, and it runs here with no server, no model download and no
+   * waiting. If your llamafile is broken at 13:40 on the Friday, you can still
+   * follow along, still write signals, and still publish an extension.
+   *
+   * It is also the honest demonstration of the split. Everything this command
+   * prints was computed without a model. Ask the agent the same question and
+   * the only thing it adds is the prose.
+   */
   pi.registerCommand("phish", {
-    description: "Triage a .eml file for phishing indicators",
+    description: "Triage a .eml file for phishing indicators (no model involved)",
     handler: async (args: string, ctx: any) => {
       const path = args.trim();
+
+      // Bare `/phish` clears a previous report rather than being an error.
       if (!path) {
-        ctx.ui.notify("Usage: /phish <path-to-eml>", "warning");
+        ctx.ui.setWidget("phish-triage", undefined);
+        ctx.ui.notify("Usage: /phish <path-to-eml>. Report cleared.", "info");
         return;
       }
+
       const resolved = resolveEmlPath(path);
       if (!resolved) {
         ctx.ui.notify(`No such .eml file: ${path}`, "error");
         return;
       }
+
       try {
         const result = triage(parseEmail(readFileSync(resolved)));
         const high = result.signals.filter((s) => s.severity === "high").length;
+
+        // The full report goes in a widget: notify() is one line, and the whole
+        // point here is to show every fact the checks produced.
+        ctx.ui.setWidget("phish-triage", [
+          ...render(result, resolved).split("\n"),
+          "",
+          "(No model was involved. /phish with no path clears this.)",
+        ]);
+
         ctx.ui.notify(
           `${result.signals.length} signal(s), ${high} high severity — ${result.subject || "(no subject)"}`,
           high > 0 ? "warning" : "info",

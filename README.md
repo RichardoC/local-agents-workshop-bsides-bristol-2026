@@ -16,38 +16,92 @@ an open source licence so other people can install it.
 The conference wifi will not survive forty people downloading gigabytes at once.
 Everything below is a one-off download. **Do it before Friday.**
 
-### 1. Node.js 22 or newer
+### 1. This repository
 
 ```bash
-node --version      # must print v22.x or higher
+git clone https://github.com/RichardoC/local-agents-workshop-bsides-bristol-2026
+cd local-agents-workshop-bsides-bristol-2026
 ```
 
-Node 22 is required: extensions are TypeScript, and pi runs them without a build
-step. If you need to install it, get it from https://nodejs.org.
+That is the whole clone: a few hundred kilobytes, including twelve sample emails
+to work on.
 
-### 2. pi
+<details>
+<summary>Optional: 8,600 real phishing samples (422 MB)</summary>
 
-```bash
-npm install -g @earendil-works/pi-coding-agent
-pi --version
-```
-
-### 3. This repository, including the sample emails
-
-```bash
-git clone --recurse-submodules \
-  https://github.com/RichardoC/local-agents-workshop-bsides-bristol-2026
-```
-
-**`--recurse-submodules` matters.** The email samples are a submodule of about
-**420 MB**. If you clone without it you will get an empty `samples/` directory.
-Already cloned it the wrong way? Fix it with:
+There is a submodule of real phishing emails. It is genuinely optional — every
+exercise works without it — but it is the interesting thing to point your own
+signals at, so fetch it at home if you can:
 
 ```bash
 git submodule update --init --depth 1
 ```
 
-### 4. The model
+Or clone with `--recurse-submodules` in the first place. Do **not** attempt this
+on conference wifi with forty other people.
+</details>
+
+### 2. pi
+
+pi ships as a self-contained binary. **No Node.js, no npm, nothing to install** —
+download, extract, done.
+
+Take the file for your platform from the
+[v0.84.2 release](https://github.com/earendil-works/pi/releases/tag/v0.84.2):
+
+| Your machine | File |
+|---|---|
+| macOS, Apple silicon (M1–M4) | `pi-darwin-arm64.tar.gz` |
+| macOS, Intel | `pi-darwin-x64.tar.gz` |
+| Linux, x86-64 | `pi-linux-x64.tar.gz` |
+| Linux, ARM | `pi-linux-arm64.tar.gz` |
+| Windows, x86-64 | `pi-windows-x64.zip` |
+| Windows, ARM | `pi-windows-arm64.zip` |
+
+Extract it **inside this repository folder**, so that `pi/pi` exists
+(`pi\pi.exe` on Windows). That is the archive's own layout, so there is nothing
+to rename:
+
+```bash
+tar -xzf pi-darwin-arm64.tar.gz      # adjust to the file you downloaded
+./pi/pi --version                    # should print 0.84.2
+```
+
+The launcher finds it there by itself. Installed pi some other way? Also fine —
+anything on your `PATH`, or set `PI_BIN=/path/to/pi`.
+
+<details>
+<summary>Verifying the download — worth doing, at a security conference</summary>
+
+The release includes `SHA256SUMS`. Download it alongside the archive:
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS          # Linux
+shasum -a 256 -c --ignore-missing SHA256SUMS      # macOS
+```
+
+```powershell
+Get-FileHash pi-windows-x64.zip -Algorithm SHA256   # compare against the file
+```
+
+You are about to run a binary from the internet, which will then run TypeScript
+from a repository you also got from the internet. Checking the hash is the cheap
+half of that problem. The other half is reading the extension source, which is
+about 700 lines and part of the point of the afternoon.
+</details>
+
+<details>
+<summary>Optional: Node.js 22.6+</summary>
+
+**Not required.** pi bundles everything an extension imports — `typebox`, its own
+types — so extensions run with no `npm install` at all.
+
+Node unlocks two extras: `npm test`, and `npm run triage`, a command-line version
+of the analyser. Already have Node 22.6+? You get them for free. If not, ignore
+this: `/phish` inside pi does the same job.
+</details>
+
+### 3. The model
 
 Roughly **1.5 GB**. Download it into the repository folder:
 
@@ -65,6 +119,19 @@ Then check it starts:
 ./bonsai.llamafile --version
 ```
 
+### 4. Check it all worked
+
+```bash
+./doctor.sh                   # macOS, Linux, Git Bash
+.\doctor.ps1                  # Windows PowerShell
+```
+
+This is the one thing worth running before you leave home. It checks the things
+that otherwise fail *silently* — a context window that does not match, a proxy
+intercepting requests to your own machine, a truncated model download, a server
+running four slots instead of one — and tells you the exact command to fix each.
+Green across the board means Friday will be about extensions, not setup.
+
 ---
 
 ## Running it
@@ -74,6 +141,8 @@ Two terminals. In the first, start the model server and leave it running:
 ```bash
 ./bonsai.llamafile --server --gpu disable -c 16384 -np 1
 ```
+
+It takes a minute or two to load the weights before it will answer anything.
 
 In the second, start the agent:
 
@@ -85,24 +154,62 @@ In the second, start the agent:
 Then ask it something:
 
 ```
-Is samples/phishing_pot/email/sample-1004.eml a phishing email?
+Is samples/synthetic/09-href-text-mismatch.eml a phishing email?
 ```
 
-You should get back something along these lines — the agent calls the tool, and
+You should get back something along these lines — the agent calls the tool, then
 writes its verdict from the signals that come back:
 
-> The email file `samples/phishing_pot/email/sample-1004.eml` contains several
-> phishing indicators. The **reply-to** address is mismatched with the **from**
-> address, which is a red flag as replies typically leave the sender's domain.
-> Additionally, the **SPF** record is marked as **softfail**, and the **DMARC**
-> record is **fail**, indicating potential issues with email authentication.
+> The email file `samples/synthetic/09-href-text-mismatch.eml` appears to be a
+> phishing email. [...] The most notable finding is a **high signal** indicating
+> a mismatch between the link text ("www.northgate-bank.example") and the actual
+> destination ("sess-4471.tracking-hop-19.example"), which is a classic phishing
+> tactic.
 
 Every claim there traces back to a deterministic check. Nothing was guessed.
 
-The wrapper script uses the model configuration committed in this repository
-(`.pi/agent/models.json`) rather than anything in your home directory, so it
-does not disturb an existing pi setup. Delete the folder and every trace of the
+Worth trying next, because it is the harder test:
+
+```
+Is samples/synthetic/01-clean-newsletter.eml a phishing email?
+```
+
+That one is legitimate and the tool raises nothing. A triage tool that flags
+everything is worse than no tool, because people stop reading it — so the model
+has to be willing to say "this looks fine". Watch whether yours does.
+
+The launcher uses the model configuration committed in this repository
+(`.pi/agent/models.json`) rather than anything in your home directory, so it does
+not disturb an existing pi setup. Delete the folder and every trace of the
 workshop is gone.
+
+### If your model will not start
+
+You are not stuck, and you do not have to sit and watch. The deterministic half
+of this workshop is the half that does the work, and it needs no model, no
+server and no download:
+
+```bash
+./pi-workshop.sh --no-model
+```
+
+Then, inside pi:
+
+```
+/phish samples/synthetic/06-brand-in-subdomain.eml
+```
+
+You get the full report with no model in the loop at all. Every exercise up to
+and including "write your own signal" works this way; you can develop, test and
+publish an extension without ever loading a model. The agent is the last mile,
+not the foundation.
+
+With Node installed there is also a command-line version, handy for running over
+the whole set at once:
+
+```bash
+npm run triage -- samples/synthetic/*.eml
+```
 
 ---
 
@@ -260,9 +367,16 @@ extensions/
   lib/signals.ts      signal detection — node: built-ins only, no dependencies
   lib/eml.test.ts     tests            — node:test, no framework
   phish-triage.ts     the pi extension — a thin wrapper over the two libraries
+templates/starter/    copy this to begin your own extension
+tools/
+  make-samples.mjs    regenerates the synthetic samples
+  triage-cli.ts       run the analyser from the shell, with no agent at all
+doctor.sh/.ps1        setup check — run this first if anything misbehaves
+pi-workshop.sh/.ps1   the launcher: finds pi, sets the config, loads extensions
+workshop-system-prompt.md  the short system prompt the launcher uses
 .pi/agent/models.json model config, committed so nobody edits their home directory
-workshop-system-prompt.md  the short system prompt the wrapper scripts use
-samples/phishing_pot  submodule of real phishing emails (see Credits)
+samples/synthetic/    12 samples we wrote, MIT, one signal each
+samples/phishing_pot  optional submodule of 8,600 real emails (see Credits)
 ```
 
 The wrapper scripts replace pi's default system prompt with
@@ -323,6 +437,34 @@ new URL("http://pаypal.com").hostname   // → "xn--pypal-4ve.com"
 That `а` is Cyrillic U+0430. If `xn--` shows up in the parsed hostname but not in
 the text you started with, the domain was never ASCII.
 
+### One signal at a time
+
+Real phishing trips five checks at once, which teaches you nothing about any of
+them individually. So `samples/synthetic/` has twelve messages we wrote, each
+built to trip **one**:
+
+| File | Signal |
+|---|---|
+| `01-clean-newsletter.eml` | none — the control |
+| `02-reply-to-mismatch.eml` | `reply_to_mismatch` |
+| `03-display-name-spoof.eml` | `display_name_is_different_address` |
+| `04-auth-fail.eml` | `spf_fail`, `dkim_fail`, `dmarc_fail` |
+| `05-no-auth-headers.eml` | `auth_results_absent` |
+| `06-brand-in-subdomain.eml` | `brand_in_subdomain` |
+| `07-lookalike-domain.eml` | `lookalike_domain` |
+| `08-homoglyph-punycode.eml` | `punycode_link` |
+| `09-href-text-mismatch.eml` | `href_text_mismatch` |
+| `10-executable-attachment.eml` | `dangerous_attachment` |
+| `11-rtl-override-filename.eml` | `rtl_override_filename` |
+| `12-attachment-type-mismatch.eml` | `attachment_type_mismatch` |
+
+Open the `.eml` in a text editor, work out what should fire, then check yourself
+with `/phish`. They are a few kilobytes each and MIT licensed, so you can copy
+them into whatever you build. Every domain uses the reserved `.example` TLD, so
+none of them can point at a real organisation even by accident.
+
+Start with `01`. It is legitimate, and the correct output is silence.
+
 ### What we deliberately do not do
 
 No DNS, no WHOIS, no URL reputation, no hash lookups. Everything happens offline,
@@ -335,58 +477,80 @@ thing to depend on at a conference.
 
 ## Build your own
 
-Develop against a file directly — no install, no publish step:
+Start from the template rather than a blank file. It is a complete, working
+package — tool, slash command, tests, licence, `package.json`:
 
 ```bash
-pi -e ./extensions/my-thing.ts
+cp -r templates/starter ../my-extension
+cd ../my-extension
+../local-agents-workshop-bsides-bristol-2026/pi/pi -e ./extensions/my-tool.ts
 ```
 
-Or drop it in `~/.pi/agent/extensions/` and use `/reload` for hot reload. The
-wrapper script picks up anything in `extensions/`, so adding a file is enough.
+Ask it "how many words are in README.md?" and it works immediately. Then start
+replacing the middle.
 
-A minimal extension:
+`/reload` inside pi picks up your edits without restarting. The launcher also
+loads anything in this repo's `extensions/`, so dropping a file there is enough
+if you would rather work in place.
 
-```ts
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+**No `npm install` required.** pi bundles what extensions import — `typebox`,
+`@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-tui`
+— plus every `node:` built-in. You only need a `node_modules` if you reach for
+something outside that list.
 
-export default function (pi: ExtensionAPI) {
-  pi.registerTool({
-    name: "my_tool",
-    label: "My Tool",
-    description: "What it does, written for the model to read.",
-    parameters: Type.Object({ path: Type.String() }),
-    async execute(_id, params, _signal, _onUpdate, _ctx) {
-      return { content: [{ type: "text", text: "..." }], details: {} };
-    },
-  });
-}
+### The one structural rule
+
+Keep the deterministic core in `lib/`, importing **nothing** but `node:` modules:
+
+```
+extensions/
+  lib/analyse.ts        the real work — no pi, no typebox, testable with node --test
+  lib/analyse.test.ts   fast, offline, no model
+  my-tool.ts            thin pi wrapper: parameters in, labelled text out
 ```
 
-Ideas that suit this treatment, all following the same deterministic-core rule:
-log and alert triage, honeypot session summaries, `gitleaks` false-positive
-triage, shadow-AI scanning of a repository, firmware `strings` triage, ADS-B
-anomaly narration, ICS asset inventory summaries.
+Three reasons, in increasing order of importance: it runs in CI, it keeps working
+when the model server does not, and `npm test` can actually load it — bare Node
+cannot resolve `typebox`, because that comes from inside pi.
+
+Ideas that suit this treatment: log and alert triage, honeypot session summaries,
+`gitleaks` false-positive triage, shadow-AI scanning of a repository, firmware
+`strings` triage, ADS-B anomaly narration, ICS asset inventory summaries.
 
 ## Publish it
 
-Push to GitHub with a `package.json` and anyone can install it directly from the
-repository — no npm publish required:
+Do this **early**, while your tool is still a stub. Publishing takes five minutes
+when nothing is on fire and twenty when you are also debugging.
+
+```bash
+git init && git add -A && git commit -m "Initial extension"
+git remote add origin https://github.com/<you>/<your-repo>
+git push -u origin main
+```
+
+Anyone can then install it straight from the repository — git is a first-class
+package source, so no npm publish is involved:
 
 ```bash
 pi install https://github.com/<you>/<your-repo>
 ```
 
+Three things make that work, and the template already has all three:
+
 ```json
 {
   "name": "my-package",
+  "license": "MIT",
   "keywords": ["pi-package"],
-  "pi": { "extensions": ["./extensions"], "skills": ["./skills"] }
+  "pi": { "extensions": ["./extensions"] }
 }
 ```
 
-Add the topic **`bsides-bristol-2026`** to your repository so the room can find
-each other's work afterwards.
+...plus an actual `LICENSE` file. Without one, your repository is visible but not
+open source, and nobody can safely use it.
+
+Add the repository topic **`bsides-bristol-2026`** so the room can find each
+other's work afterwards — then go and install a neighbour's.
 
 ---
 
@@ -402,3 +566,12 @@ them from the original author. That also means the non-commercial term applies
 to those samples, not to anything you write here.
 
 Please don't feed the samples into a live mail system.
+
+---
+
+## Running the workshop yourself
+
+The facilitator run of show — timings, what to say when, a symptom-to-fix triage
+table, and contingencies for no wifi or a machine that cannot run the model — is
+in [RUNSHEET.md](RUNSHEET.md). The material is MIT licensed; take it and run it
+at your own event.

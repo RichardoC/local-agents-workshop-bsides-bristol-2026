@@ -1,0 +1,35 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from smtp.invoicing-4471.example (smtp.invoicing-4471.example [192.0.2.77])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Authentication-Results: imap-01.recipient.example;
+	spf=pass smtp.mailfrom=invoicing-4471.example;
+	dkim=pass header.d=invoicing-4471.example;
+	dmarc=pass header.from=invoicing-4471.example
+Return-Path: <invoices@invoicing-4471.example>
+From: Invoicing <invoices@invoicing-4471.example>
+To: accounts@recipient.example
+Subject: Invoice 29481 attached
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.4f1d9@invoicing-4471.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_Part_5501_2048119903"
+
+------=_Part_5501_2048119903
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Please find invoice 29481 attached.
+
+
+------=_Part_5501_2048119903
+Content-Type: application/octet-stream; name="invoice_29481.exe"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="invoice_29481.exe"
+
+UGxhY2Vob2xkZXIgYXR0YWNobWVudCBjb250ZW50IGZvciB0aGUgQlNpZGVzIEJyaXN0b2wgd29y
+a3Nob3AuIE5vdCBleGVjdXRhYmxlLg==
+
+------=_Part_5501_2048119903--

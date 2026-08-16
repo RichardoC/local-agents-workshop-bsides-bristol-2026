@@ -6,12 +6,51 @@
 # Usage:
 #   .\pi-workshop.ps1                        interactive
 #   .\pi-workshop.ps1 -p "your question"     one-shot
+#   .\pi-workshop.ps1 --no-model             start without a model server
 #
 # If PowerShell refuses to run this, it is the execution policy, not the script:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
+
+# --no-model: skip the health check and start anyway. /phish still works, since
+# it never calls the model. Anything you type at the agent will fail, which is
+# the expected trade.
+$requireModel = $true
+$passthrough = @()
+foreach ($a in $args) {
+    if ($a -eq "--no-model") { $requireModel = $false } else { $passthrough += $a }
+}
+
+# --- Find pi ----------------------------------------------------------------
+#
+# Preference order: an explicit PI_BIN, then the static build extracted into
+# this folder, then whatever is on PATH. The static build is a self-contained
+# executable: no Node.js, no npm, nothing to install.
+$piBin = $null
+if ($env:PI_BIN -and (Test-Path $env:PI_BIN)) {
+    $piBin = $env:PI_BIN
+}
+elseif (Test-Path ".\pi\pi.exe") {
+    $piBin = ".\pi\pi.exe"
+}
+elseif (Get-Command pi -ErrorAction SilentlyContinue) {
+    $piBin = "pi"
+}
+else {
+    Write-Error @"
+Could not find pi.
+
+Download pi-windows-x64.zip (or pi-windows-arm64.zip on an ARM machine) from
+  https://github.com/earendil-works/pi/releases/tag/v0.84.2
+and extract it here, so that .\pi\pi.exe exists.
+
+It needs no Node.js and no npm. If you have pi installed some other way, put it
+on your PATH or set PI_BIN to its full path.
+"@
+    exit 1
+}
 
 # Use the repo's model config instead of ~\.pi\agent.
 $env:PI_CODING_AGENT_DIR = Join-Path $PWD ".pi\agent"
@@ -20,16 +59,30 @@ $env:PI_CODING_AGENT_DIR = Join-Path $PWD ".pi\agent"
 $env:NO_PROXY = "127.0.0.1,localhost"
 $env:no_proxy = $env:NO_PROXY
 
-try {
-    Invoke-WebRequest -Uri "http://127.0.0.1:8080/health" -UseBasicParsing -TimeoutSec 5 | Out-Null
-}
-catch {
-    Write-Error @"
+if ($requireModel) {
+    try {
+        # -Proxy $null stops Windows' system proxy settings from being applied to
+        # a request aimed at this machine, which NO_PROXY alone does not prevent
+        # for Invoke-WebRequest.
+        Invoke-WebRequest -Uri "http://127.0.0.1:8080/health" `
+            -UseBasicParsing -TimeoutSec 5 -Proxy $null | Out-Null
+    }
+    catch {
+        Write-Error @"
 The model server is not responding on http://127.0.0.1:8080
+
 Start it first, in another terminal:
-  .\bonsai.llamafile --server --gpu disable -c 16384 -np 1
+  .\bonsai.llamafile.exe --server --gpu disable -c 16384 -np 1
+
+It takes a minute or two to load the weights before it answers. Run
+.\doctor.ps1 to check everything else while you wait.
+
+You are not blocked on it, though. The deterministic half of this workshop needs
+no model at all:
+  .\pi-workshop.ps1 --no-model      then use /phish <file>
 "@
-    exit 1
+        exit 1
+    }
 }
 
 # Load every extension in extensions/ explicitly, so pi does not need to prompt
@@ -49,4 +102,8 @@ $systemPrompt = Get-Content -Path "workshop-system-prompt.md" -Raw
 # tools. Their definitions are a large part of the prompt, and on a slow local
 # model that cost is paid on every turn; a small model also tends to reach for
 # them instead of answering. Drop the flag if you want the full coding agent.
-& pi --provider local --model bonsai-8b --system-prompt $systemPrompt -nbt @extArgs @args
+#
+# --offline stops pi making network calls at startup. Everything here is local,
+# and on conference wifi a blocking startup fetch looks exactly like a hang.
+& $piBin --provider local --model bonsai-8b --system-prompt $systemPrompt `
+    --offline -nbt @extArgs @passthrough

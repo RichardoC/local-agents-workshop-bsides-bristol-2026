@@ -1,0 +1,20 @@
+{
+  "name": "my-pi-extension",
+  "version": "0.1.0",
+  "description": "A pi extension. Say what yours does here.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "bsides-bristol-2026"
+  ],
+  "pi": {
+    "extensions": ["./extensions"]
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test extensions/lib/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  }
+}

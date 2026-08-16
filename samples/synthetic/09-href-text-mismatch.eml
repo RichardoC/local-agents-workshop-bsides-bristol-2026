@@ -1,0 +1,36 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from smtp.delivery-notice-88.example (smtp.delivery-notice-88.example [203.0.113.55])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Authentication-Results: imap-01.recipient.example;
+	spf=pass smtp.mailfrom=delivery-notice-88.example;
+	dkim=pass header.d=delivery-notice-88.example;
+	dmarc=pass header.from=delivery-notice-88.example
+Return-Path: <alerts@delivery-notice-88.example>
+From: Online Banking <alerts@delivery-notice-88.example>
+To: recipient@recipient.example
+Subject: Statement ready to view
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.2a6b8@delivery-notice-88.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_Part_8812_1739204411"
+
+------=_Part_8812_1739204411
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Your statement is ready. Sign in to view it.
+
+------=_Part_8812_1739204411
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+<html><body>
+<p>Your statement is ready.</p>
+<p><a href="https://sess-4471.tracking-hop-19.example/r?u=9f2">
+https://www.northgate-bank.example/online/statements</a></p>
+</body></html>
+
+------=_Part_8812_1739204411--

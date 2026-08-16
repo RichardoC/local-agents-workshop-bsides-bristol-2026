@@ -152,3 +152,14 @@ vite.config.ts.timestamp-*
 
 # The model itself is ~1.5GB. Download it, don't commit it.
 *.llamafile
+
+# The pi static build, extracted here by attendees (~110 MB).
+/pi/
+/pi
+/pi.exe
+
+# Release archives, if downloaded into the repo folder.
+pi-*-x64.tar.gz
+pi-*-arm64.tar.gz
+pi-windows-*.zip
+SHA256SUMS
