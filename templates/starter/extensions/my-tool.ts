@@ -94,24 +94,32 @@ export default function (pi: ExtensionAPI) {
    * A slash command running the same core, with no model involved.
    *
    * Worth adding to anything you build. It is how you test the deterministic
-   * half quickly, and it keeps working when the model server does not.
+   * half quickly, and it keeps working when the model server does not:
+   *
+   *   pi -e ./extensions/my-tool.ts -p "/wc README.md"
+   *
+   * Note the ctx.hasUI guard. Every ctx.ui method is a no-op outside the TUI,
+   * so without it this command prints absolutely nothing in print or JSON mode
+   * — a silent failure, and a self-inflicted one.
    */
   pi.registerCommand("wc", {
     description: "Count words in a file (no model involved)",
     handler: async (args: string, ctx: any) => {
       const path = args.trim();
       if (!path) {
-        ctx.ui.notify("Usage: /wc <path>", "warning");
+        if (ctx.hasUI) ctx.ui.notify("Usage: /wc <path>", "warning");
+        else console.error("Usage: /wc <path>");
         return;
       }
       try {
         const r = analyse(readFileSync(path, "utf8"));
-        ctx.ui.notify(
-          `${r.words} words, ${r.uniqueWords} unique, ${r.lines} lines`,
-          "info",
-        );
+        const summary = `${r.words} words, ${r.uniqueWords} unique, ${r.lines} lines`;
+        if (ctx.hasUI) ctx.ui.notify(summary, "info");
+        else console.log(summary);
       } catch (err) {
-        ctx.ui.notify(`Failed: ${(err as Error).message}`, "error");
+        const msg = `Failed: ${(err as Error).message}`;
+        if (ctx.hasUI) ctx.ui.notify(msg, "error");
+        else console.error(msg);
       }
     },
   });

@@ -204,11 +204,21 @@ export default function (pi: ExtensionAPI) {
       try {
         const result = triage(parseEmail(readFileSync(resolved)));
         const high = result.signals.filter((s) => s.severity === "high").length;
+        const report = render(result, resolved);
+
+        // ctx.ui methods are no-ops outside the TUI (print mode, JSON mode), so
+        // guarding on hasUI is the difference between a report and silence. That
+        // silence would be a nasty joke in a workshop about failures that give
+        // you no error message.
+        if (!ctx.hasUI) {
+          console.log(report);
+          return;
+        }
 
         // The full report goes in a widget: notify() is one line, and the whole
         // point here is to show every fact the checks produced.
         ctx.ui.setWidget("phish-triage", [
-          ...render(result, resolved).split("\n"),
+          ...report.split("\n"),
           "",
           "(No model was involved. /phish with no path clears this.)",
         ]);
@@ -218,6 +228,10 @@ export default function (pi: ExtensionAPI) {
           high > 0 ? "warning" : "info",
         );
       } catch (err) {
+        if (!ctx.hasUI) {
+          console.error(`Failed: ${(err as Error).message}`);
+          return;
+        }
         ctx.ui.notify(`Failed: ${(err as Error).message}`, "error");
       }
     },
