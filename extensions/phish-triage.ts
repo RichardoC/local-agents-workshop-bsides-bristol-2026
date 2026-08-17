@@ -23,6 +23,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 import { parseEmail } from "./lib/eml.ts";
+import { repairPathArgs } from "./lib/repair.ts";
 import { triage, type Triage } from "./lib/signals.ts";
 
 /**
@@ -128,6 +129,27 @@ export default function (pi: ExtensionAPI) {
           "Path to the .eml file to analyse, as the user wrote it (relative to the current directory).",
       }),
     }),
+
+    /**
+     * Repair near-miss arguments before pi validates them against the schema.
+     *
+     * This runs before validation and before execute(). It exists because a
+     * retry is expensive here: on a CPU-only laptop, making the model try the
+     * call again costs a full prompt evaluation — minutes, not milliseconds. A
+     * 1-bit-quantised 8B model gets the call *nearly* right often enough that
+     * accepting `{"file": ...}` or `{"path": ["x"]}` at the door is worth far
+     * more than it costs.
+     *
+     * The schema above stays strict on purpose: the model is still told exactly
+     * one correct shape. This widens only what we tolerate, never what we
+     * advertise. And repairPathArgs is deliberately conservative — input that is
+     * not an obvious near-miss comes back untouched, so validation still
+     * produces a real error rather than this inventing a call nobody made.
+     */
+    prepareArguments(args) {
+      return repairPathArgs(args).args as typeof args;
+    },
+
     async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
       const { path } = params as { path: string };
 

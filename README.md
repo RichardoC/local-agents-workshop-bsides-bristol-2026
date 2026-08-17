@@ -569,6 +569,20 @@ Please don't feed the samples into a live mail system.
 
 ---
 
+## Tuning pi for a small model
+
+Everything above is the workshop path. If you want to go further — subagents to
+keep context short, recovering from broken tool calls, and the `settings.json`
+values that matter when prompt evaluation runs at single-digit tokens per second
+— see [docs/small-model-tuning.md](docs/small-model-tuning.md).
+
+The headline is unintuitive: **subagents will usually make this *slower*.** On a
+single-slot CPU server the KV cache is what keeps turns cheap, and every subagent
+is a cache miss that also evicts the parent's prefix. They are the right tool for
+avoiding the long-session cliff, not for latency.
+
+---
+
 ## Running the workshop yourself
 
 The facilitator run of show — timings, what to say when, a symptom-to-fix triage

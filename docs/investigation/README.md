@@ -38,11 +38,37 @@ client timeout, which shaped — and repeatedly broke — the experiments below.
 |---|---|---|
 | 1 | Reply allowance collapses to 1 token as context grows; empty reply, exit 0 | **Proven, measured** |
 | 2 | A 300s client timeout aborts deep prompts; identical request re-sent 4× | **Proven, reproduced** |
-| 3 | The 300s limit is Node's `fetch`/undici default, not a pi setting | **Proven** |
+| 3 | The 300s limit is Node's `fetch`/undici default, not a pi setting | **PARTLY WRONG — see corrections** |
 | 4 | `-np 1` is required or the KV cache is thrown away every turn | **Proven, measured** |
-| 5 | Compaction is manual only — no automatic trigger, no warning | **Proven (source)** |
+| 5 | Compaction is manual only — no automatic trigger, no warning | **Right effect, wrong reason — see corrections** |
 | 6 | llamafile's anti-repetition samplers are off by default | **Proven (source + `--help`)** |
 | 7 | Phrase-level looping (the original complaint) | **NOT REPRODUCED** |
+
+### Corrections found later
+
+Reading pi's shipped `docs/settings.md` (in the static build, `pi/docs/`)
+overturned parts of findings 2, 3 and 5. Full write-up in
+[../small-model-tuning.md](../small-model-tuning.md); in brief:
+
+- **`httpIdleTimeoutMs` is a pi setting**, default `300000`, and the docs say
+  "set to `0` to disable". Finding 3 asserted no such setting existed. It does.
+  One caveat pointing the other way: a deep-session run on *default* settings
+  later survived 500 seconds without erroring, so the ceiling may be idle-based
+  rather than total, and the original 300s observation may have come from
+  `fetch`/undici inside the measurement scripts rather than from pi itself.
+- **The four identical requests were `retry.maxRetries` (default 3)** — one
+  attempt plus three agent-level retries. This report called that unexplained
+  because the provider-level SDK was constructed with `maxRetries: 0`, which was
+  the wrong layer to look at.
+- **Compaction is not manual-only by design.** `compaction.enabled` defaults to
+  `true`; it is inert here because `reserveTokens` (16384) and
+  `keepRecentTokens` (20000) both exceed the 16384-token window. The observed
+  behaviour was right; the stated cause was not. Note that with those values
+  sized down it still did not fire in testing at depth 10,995 — so the *effect*
+  in finding 5 stands, and the mechanism remains open.
+
+Method note, since it cost time twice: pi's own `pi/docs/` directory ships inside
+the static build. Read it before concluding that something is not configurable.
 
 ---
 
