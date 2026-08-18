@@ -92,11 +92,16 @@ fi
 head_ "Model server"
 
 model_file=$(ls -1 ./*.llamafile ./*.llamafile.exe 2>/dev/null | head -1)
+n_models=$(ls -1 ./*.llamafile ./*.llamafile.exe 2>/dev/null | wc -l | tr -d ' ')
+if [ "${n_models:-0}" -gt 1 ]; then
+  warns "More than one .llamafile here: $(ls -1 ./*.llamafile ./*.llamafile.exe 2>/dev/null | tr '\n' ' ')" \
+        "Harmless, but only start one — and make WORKSHOP_MODEL match the one you start."
+fi
 if [ -n "$model_file" ]; then
   sz=$(wc -c < "$model_file" 2>/dev/null || echo 0)
   if [ "$sz" -lt 100000000 ]; then
     bad "$model_file is only $((sz / 1048576)) MB — the download did not finish" \
-        "Delete it and download again. It should be roughly 1.5 GB."
+        "Delete it and download again: about 1.5 GB for Bonsai, 3.1 GB for Granite."
   elif [ -x "$model_file" ]; then
     ok "$model_file  ($((sz / 1048576)) MB, executable)"
   else
@@ -113,6 +118,25 @@ if [ -z "$props" ]; then
         "Start it: ./bonsai.llamafile --server --gpu disable -c 16384 -np 1  (it takes a minute or two to load)"
 else
   ok "Model server is up"
+
+  # llamafile serves whatever weights it loaded and ignores the model name in
+  # the request, so a mismatch between the llamafile you started and the model
+  # you tell pi to use is silent. Report what is actually loaded.
+  loaded=$(printf '%s' "$props" | tr ',{}' '\n\n\n' | grep -o '"model_path"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | head -1)
+  if [ -n "$loaded" ]; then
+    base=$(basename "$loaded")
+    case "$base" in
+      *[Bb]onsai*) want="bonsai-8b" ;;
+      *granite*)   want="granite-3b" ;;
+      *)           want="" ;;
+    esac
+    if [ -n "$want" ]; then
+      ok "Server has $base loaded — use ${B}--model $want${N} (WORKSHOP_MODEL=$want)"
+    else
+      warns "Server has $base loaded, which is neither configured model" \
+            "Add an entry for it to .pi/agent/models.json, or start the llamafile you meant to."
+    fi
+  fi
 
   # The two silent killers, both invisible until something behaves oddly.
   n_ctx=$(printf '%s' "$props" | tr ',{}' '\n\n\n' | grep -o '"n_ctx"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*$' | head -1)
@@ -194,6 +218,44 @@ if command -v node > /dev/null 2>&1; then
 else
   warns "node not installed" \
         "Not required. pi runs the extension without it; you just cannot run npm test or the triage CLI."
+fi
+
+# --- Publishing -------------------------------------------------------------
+#
+# The session's stated goal is that you leave with something published. Every
+# check here fails at 15:00 if it is not sorted out beforehand, and 15:00 is far
+# too late — all of it is silent until the moment you need it.
+
+head_ "Publishing ${D}(the goal of the session)${N}"
+
+if ! command -v git > /dev/null 2>&1; then
+  bad "git not installed" "Install git, or plan to pair with a neighbour when we publish."
+else
+  ok "git $(git --version 2>/dev/null | awk '{print $3}')"
+  if [ -z "$(git config --get user.name 2>/dev/null)" ] || [ -z "$(git config --get user.email 2>/dev/null)" ]; then
+    bad "git has no author identity — 'git commit' will refuse to run" \
+        "git config --global user.name \"Your Name\" && git config --global user.email \"you@example.com\""
+  else
+    ok "git identity: $(git config --get user.name) <$(git config --get user.email)>"
+  fi
+fi
+
+if command -v gh > /dev/null 2>&1; then
+  if gh auth status > /dev/null 2>&1; then
+    ok "gh is authenticated — 'gh repo create --public --source=. --push' will work"
+  else
+    warns "gh is installed but not authenticated" "Run it now, not at 15:00:  gh auth login"
+  fi
+else
+  warns "gh (GitHub CLI) not installed — optional, but it removes the hardest step" \
+        "Without it you need a personal access token: GitHub has not accepted a password over HTTPS since 2021."
+fi
+
+if curl -sf --max-time 8 -o /dev/null https://github.com 2>/dev/null; then
+  ok "github.com is reachable"
+else
+  warns "cannot reach github.com" \
+        "Conference wifi may be filtering it, or a captive portal is intercepting TLS. Use a phone hotspot. Do NOT disable certificate verification."
 fi
 
 # --- Summary ----------------------------------------------------------------

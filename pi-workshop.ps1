@@ -8,11 +8,21 @@
 #   .\pi-workshop.ps1 -p "your question"     one-shot
 #   .\pi-workshop.ps1 --no-model             start without a model server
 #
+# Two models are configured. Pick one with WORKSHOP_MODEL; the default is Bonsai
+# because it is the smaller download:
+#   $env:WORKSHOP_MODEL = "granite-3b"; .\pi-workshop.ps1
+# Whichever you pick, the llamafile you are running must be the matching one.
+#
 # If PowerShell refuses to run this, it is the execution policy, not the script:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
+
+# Which of the models in .pi\agent\models.json to use. Both are configured with
+# the same 16384-token context window, so the server command is identical either
+# way — only the .llamafile you run differs.
+$workshopModel = if ($env:WORKSHOP_MODEL) { $env:WORKSHOP_MODEL } else { "bonsai-8b" }
 
 # --no-model: skip the health check and start anyway. /phish still works, since
 # it never calls the model. Anything you type at the agent will fail, which is
@@ -108,5 +118,5 @@ $systemPrompt = Get-Content -Path "workshop-system-prompt.md" -Raw
 #
 # --offline stops pi making network calls at startup. Everything here is local,
 # and on conference wifi a blocking startup fetch looks exactly like a hang.
-& $piBin --provider local --model bonsai-8b --system-prompt $systemPrompt `
+& $piBin --provider local --model $workshopModel --system-prompt $systemPrompt `
     --offline -nbt @extArgs @passthrough

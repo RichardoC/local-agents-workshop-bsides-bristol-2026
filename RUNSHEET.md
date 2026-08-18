@@ -109,8 +109,13 @@ Then the table that is the actual takeaway:
 | `lib/signals.ts` | Decide what is suspicious | No |
 | `phish-triage.ts` | Summarise and explain | Yes |
 
-77% of 8,600 real samples raise a signal with no model at all, at about a
-millisecond each. Say that number out loud — it reframes what the model is for.
+69% of 8,614 real samples raise at least one signal with no model at all — 41%
+raise a high-severity one — at about 0.8 ms each. Say that number out loud; it
+reframes what the model is for.
+
+(Both figures were measured over the whole corpus in one process. Treat the 41%
+with care: a measured chunk of those high-severity hits are false positives —
+see docs/investigation for which checks and why.)
 
 ## 14:30 — Break (10 min)
 

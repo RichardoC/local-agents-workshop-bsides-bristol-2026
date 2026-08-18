@@ -113,9 +113,30 @@ of the analyser. Already have Node 22.6+? You get them for free. If not, ignore
 this: `/phish` inside pi does the same job.
 </details>
 
-### 3. The model
+### 3. A model — pick one
 
-Roughly **1.5 GB**. Download it into the repository folder:
+Two are configured and both work. **Either is fine**; pick on download size and
+what your laptop can spare.
+
+| | **Bonsai 8B** | **Granite 4.1 3B** |
+|---|---|---|
+| Download | **1.5 GB** | 3.1 GB |
+| Quantisation | Q1_0 — one bit per weight, extremely aggressive | Q6_K — near-lossless |
+| Parameters | 8 billion | 3.4 billion |
+| Native context | 65,536 | **131,072** |
+| Verdict accuracy on our test set | 38/38 | 38/38 |
+| Model id for `--model` | `bonsai-8b` | `granite-3b` |
+
+Both scored identically on correctness, so this is genuinely a matter of taste.
+Bonsai is the smaller download and the default. Granite is the more comfortable
+model to push beyond the workshop — a far gentler quantisation and eight times
+the context — at twice the bytes. If you are on a metered connection or a
+1.5 GB-vs-3 GB decision matters, take Bonsai and lose nothing today.
+
+There is a fuller comparison, with the measurements behind it, in
+[docs/model-comparison.md](docs/model-comparison.md).
+
+**Bonsai 8B** (the default):
 
 ```bash
 curl -L -o bonsai.llamafile \
@@ -123,7 +144,50 @@ curl -L -o bonsai.llamafile \
 chmod +x bonsai.llamafile
 ```
 
-On Windows, rename it to `bonsai.llamafile.exe`.
+**Granite 4.1 3B**:
+
+```bash
+curl -L -o granite.llamafile \
+  "https://richardoc-llamafile-generator.hf.space/download?model=unsloth%2Fgranite-4.1-3b-GGUF%3Agranite-4.1-3b-Q6_K.gguf&version=latest&mode=auto"
+chmod +x granite.llamafile
+```
+
+On Windows, add `.exe` to whichever you downloaded — `bonsai.llamafile.exe` or
+`granite.llamafile.exe`.
+
+Those URLs build the llamafile on demand from a GGUF on Hugging Face, via
+[RichardoC/llamafile-generator](https://huggingface.co/spaces/RichardoC/llamafile-generator).
+Two things about it are worth knowing before Friday:
+
+- It is rate limited to **5 builds per IP per hour, 2 concurrent**. Forty people
+  on one conference network share a single public IP. This is the strongest reason
+  in this document to download at home.
+- Nothing is cached server-side; each request rebuilds and restreams. If the Space
+  is asleep the first request also pulls the ~320 MB loader, so give it a minute.
+
+<details>
+<summary>Using a different model entirely</summary>
+
+Any GGUF on Hugging Face works — point the generator at
+`owner/repo:path/file.gguf` and add a matching entry to
+`.pi/agent/models.json`. Check it first without downloading gigabytes:
+
+```bash
+curl "https://richardoc-llamafile-generator.hf.space/api/validate?model=owner/repo:file.gguf&version=0.10.5"
+```
+
+The one hard requirement is that the GGUF's chat template supports **tool
+calling** — without it the extension's tool is never invoked and the whole
+exercise collapses into a chatbot. Once the server is running, check with:
+
+```bash
+curl -s http://127.0.0.1:8080/props | grep -o '"supports_tools":[a-z]*'
+```
+
+Note the base model repo (`ibm-granite/granite-4.1-3b`) holds `.safetensors`,
+not GGUF. You want a quantised repo — usually `unsloth/…-GGUF` or
+`bartowski/…-GGUF`.
+</details>
 
 Then check it starts:
 
@@ -159,20 +223,38 @@ Green across the board means Friday will be about extensions, not setup.
 
 ## Running it
 
-Two terminals. In the first, start the model server and leave it running:
+Two terminals. In the first, start the model server and leave it running —
+**the same command whichever model you downloaded**:
 
 ```bash
-./bonsai.llamafile --server --gpu disable -c 16384 -np 1
+./bonsai.llamafile  --server --gpu disable -c 16384 -np 1     # Bonsai
+./granite.llamafile --server --gpu disable -c 16384 -np 1     # or Granite
 ```
 
 It takes a minute or two to load the weights before it will answer anything.
 
-In the second, start the agent:
+In the second, start the agent. Bonsai is the default, so if that is what you
+downloaded there is nothing to choose:
 
 ```bash
 ./pi-workshop.sh              # macOS, Linux, Git Bash
 .\pi-workshop.ps1             # Windows PowerShell
 ```
+
+For Granite, name it:
+
+```bash
+WORKSHOP_MODEL=granite-3b ./pi-workshop.sh
+```
+
+```powershell
+$env:WORKSHOP_MODEL = "granite-3b"; .\pi-workshop.ps1
+```
+
+The two must agree. Running the Granite llamafile while pi is told `bonsai-8b`
+does not fail loudly — llamafile serves whatever it loaded and ignores the model
+name in the request, so you simply get the other model's answers under the wrong
+label. `./doctor.sh` reports which weights the server actually has loaded.
 
 Then ask it something:
 
@@ -436,8 +518,9 @@ whether the link text agrees with the link target — and nothing else. The mode
 never sees the raw email. That is what makes a small local model useful rather
 than merely present.
 
-Across 800 real samples from the corpus, the deterministic checks alone raise at
-least one signal on **77%** of them, in about a millisecond each. The model earns
+Across all 8,614 real samples in the corpus, the deterministic checks alone raise
+at least one signal on **69%** of them, and a high-severity one on 41%, at about
+0.8 ms each. The model earns
 its place on the other 23%, and on turning a list of signals into something a
 human can act on.
 

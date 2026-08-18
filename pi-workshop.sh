@@ -10,9 +10,19 @@
 #   ./pi-workshop.sh                        interactive
 #   ./pi-workshop.sh -p "your question"     one-shot
 #   ./pi-workshop.sh --no-model             start without a model server
+#
+# Two models are configured. Pick one with WORKSHOP_MODEL; the default is Bonsai
+# because it is the smaller download:
+#   WORKSHOP_MODEL=granite-3b ./pi-workshop.sh
+# Whichever you pick, the llamafile you are running must be the matching one.
 set -euo pipefail
 
 cd "$(dirname "$0")"
+
+# Which of the models in .pi/agent/models.json to use. Both are configured with
+# the same 16384-token context window, so the server command is identical either
+# way — only the .llamafile you run differs.
+WORKSHOP_MODEL="${WORKSHOP_MODEL:-bonsai-8b}"
 
 # --no-model: skip the health check and start anyway. /phish still works, since
 # it never calls the model. Anything you type at the agent will fail, which is
@@ -101,7 +111,7 @@ done
 # and similar). Everything here is local, and on conference wifi a blocking
 # startup fetch is exactly the kind of thing that looks like a hang.
 exec "$pi_bin" \
-  --provider local --model bonsai-8b \
+  --provider local --model "$WORKSHOP_MODEL" \
   --system-prompt "$(cat workshop-system-prompt.md)" \
   --offline \
   -nbt \
