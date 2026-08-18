@@ -78,7 +78,11 @@ if ($modelFile) {
 
 $props = $null
 try {
-    $props = Invoke-RestMethod -Uri "http://127.0.0.1:8080/props" -TimeoutSec 5 -Proxy $null
+    # PS 7+ has a real -NoProxy switch; 5.1 has none (-Proxy $null is treated as
+    # "not supplied" and the WinINET proxy still applies). Loopback is normally
+    # bypassed anyway; the Network check below flags it when it might not be.
+    $noProxy = if ($PSVersionTable.PSVersion.Major -ge 7) { @{ NoProxy = $true } } else { @{} }
+    $props = Invoke-RestMethod -Uri "http://127.0.0.1:8080/props" -TimeoutSec 5 @noProxy
 } catch { }
 
 if (-not $props) {

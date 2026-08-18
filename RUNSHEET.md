@@ -220,6 +220,7 @@ checks them.
 | "Request timed out" after ~20 min | 300s per-request limit vs slow prompt eval | Keep the server warm, avoid `--resume`/`--fork`, `/compact` |
 | Same request repeats over and over | The above, retrying — **not** a sampler problem | Do not touch `repeat_penalty` |
 | Server crashes at startup | Vulkan/driver | `--gpu disable` |
+| `Exec format error` / `run-detectors: unable to find an interpreter` | APE binary handed to the wrong interpreter (common with WINE installed, and under WSL) | `sh ./bonsai.llamafile --server ...` — works everywhere |
 | Hangs before any output | Corporate proxy intercepting 127.0.0.1 | `NO_PROXY=127.0.0.1,localhost` (the launcher sets it) |
 | `pi: command not found` | Static build not extracted, or extracted elsewhere | Extract so `./pi/pi` exists, or set `PI_BIN` |
 | Windows: script will not run | Execution policy | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` |

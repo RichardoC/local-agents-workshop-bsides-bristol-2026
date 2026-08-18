@@ -12,18 +12,18 @@
     "llamafile"
   ],
   "pi": {
-    "extensions": ["./extensions"]
+    "extensions": [
+      "./extensions"
+    ]
   },
   "scripts": {
     "test": "node --experimental-strip-types --test extensions/lib/*.test.ts",
     "triage": "node --experimental-strip-types tools/triage-cli.ts",
     "make-samples": "node tools/make-samples.mjs"
   },
-  "dependencies": {
-    "typebox": "^1.3.7"
-  },
-  "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.2"
+  "peerDependencies": {
+    "typebox": "*",
+    "@earendil-works/pi-coding-agent": "*"
   },
   "engines": {
     "node": ">=22.6.0"

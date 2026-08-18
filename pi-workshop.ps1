@@ -39,7 +39,7 @@ elseif (Get-Command pi -ErrorAction SilentlyContinue) {
     $piBin = "pi"
 }
 else {
-    Write-Error @"
+    Write-Host -ForegroundColor Red @"
 Could not find pi.
 
 Download pi-windows-x64.zip (or pi-windows-arm64.zip on an ARM machine) from
@@ -56,19 +56,22 @@ on your PATH or set PI_BIN to its full path.
 $env:PI_CODING_AGENT_DIR = Join-Path $PWD ".pi\agent"
 
 # Corporate proxies otherwise swallow requests to your own machine.
-$env:NO_PROXY = "127.0.0.1,localhost"
+$env:NO_PROXY = if ($env:NO_PROXY) { "127.0.0.1,localhost,$($env:NO_PROXY)" } else { "127.0.0.1,localhost" }
 $env:no_proxy = $env:NO_PROXY
 
 if ($requireModel) {
     try {
-        # -Proxy $null stops Windows' system proxy settings from being applied to
-        # a request aimed at this machine, which NO_PROXY alone does not prevent
-        # for Invoke-WebRequest.
+        # PowerShell 7+ has -NoProxy, which genuinely bypasses a configured proxy
+        # for this request. 5.1 has no equivalent: passing -Proxy $null there is
+        # treated as "not supplied" and the WinINET proxy still applies. Most
+        # Windows proxy configs bypass loopback anyway, so 5.1 usually works; if
+        # it does not, that is what the NO_PROXY advice in the README is for.
+        $noProxy = if ($PSVersionTable.PSVersion.Major -ge 7) { @{ NoProxy = $true } } else { @{} }
         Invoke-WebRequest -Uri "http://127.0.0.1:8080/health" `
-            -UseBasicParsing -TimeoutSec 5 -Proxy $null | Out-Null
+            -UseBasicParsing -TimeoutSec 5 @noProxy | Out-Null
     }
     catch {
-        Write-Error @"
+        Write-Host -ForegroundColor Red @"
 The model server is not responding on http://127.0.0.1:8080
 
 Start it first, in another terminal:

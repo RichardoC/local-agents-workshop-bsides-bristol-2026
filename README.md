@@ -59,12 +59,24 @@ Take the file for your platform from the
 | Windows, ARM | `pi-windows-arm64.zip` |
 
 Extract it **inside this repository folder**, so that `pi/pi` exists
-(`pi\pi.exe` on Windows). That is the archive's own layout, so there is nothing
-to rename:
+(`pi\pi.exe` on Windows). The launcher looks for it there.
+
+macOS and Linux — the tarball already contains a `pi/` directory, so plain
+extraction is enough:
 
 ```bash
 tar -xzf pi-darwin-arm64.tar.gz      # adjust to the file you downloaded
 ./pi/pi --version                    # should print 0.84.2
+```
+
+Windows — **the zip is flat**, with `pi.exe` at its root rather than inside a
+`pi\` folder. Extract it into a `pi` directory explicitly, or it will scatter
+its files over this repository and overwrite our `README.md` and `package.json`
+with pi's own:
+
+```powershell
+Expand-Archive -Path pi-windows-x64.zip -DestinationPath .\pi
+.\pi\pi.exe --version              # should print 0.84.2
 ```
 
 The launcher finds it there by itself. Installed pi some other way? Also fine —
@@ -87,7 +99,7 @@ Get-FileHash pi-windows-x64.zip -Algorithm SHA256   # compare against the file
 You are about to run a binary from the internet, which will then run TypeScript
 from a repository you also got from the internet. Checking the hash is the cheap
 half of that problem. The other half is reading the extension source, which is
-about 700 lines and part of the point of the afternoon.
+about 1,300 lines and part of the point of the afternoon.
 </details>
 
 <details>
@@ -117,6 +129,17 @@ Then check it starts:
 
 ```bash
 ./bonsai.llamafile --version
+```
+
+If Linux or WSL answers with `Exec format error` or
+`run-detectors: unable to find an interpreter`, that is not a corrupt download.
+A llamafile is an [APE binary](https://justine.lol/ape.html) — one file that runs
+on several operating systems — and some Linux installs (notably any with WINE
+registered) hand the file to the wrong interpreter because of its `MZ` header.
+Run it through the shell instead, which works everywhere:
+
+```bash
+sh ./bonsai.llamafile --version
 ```
 
 ### 4. Check it all worked

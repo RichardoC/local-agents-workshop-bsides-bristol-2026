@@ -151,7 +151,12 @@ vite.config.ts.timestamp-*
 .pi/agent/auth.json
 
 # The model itself is ~1.5GB. Download it, don't commit it.
+# The .exe form matters: the README tells Windows users to rename it.
 *.llamafile
+*.llamafile.exe
+
+# Created if anyone runs npm install, which the optional Node path makes likely.
+package-lock.json
 
 # The pi static build, extracted here by attendees (~110 MB).
 /pi/
