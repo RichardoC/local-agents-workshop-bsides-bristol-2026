@@ -1,0 +1,31 @@
+{
+  "name": "local-agents-workshop-bsides-bristol-2026",
+  "version": "1.0.0",
+  "description": "Phishing triage extension for the pi coding agent, running against a local model. BSides Bristol 2026 workshop.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "bsides-bristol-2026",
+    "phishing",
+    "local-llm",
+    "llamafile"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test extensions/lib/*.test.ts",
+    "triage": "node --experimental-strip-types tools/triage-cli.ts",
+    "make-samples": "node tools/make-samples.mjs"
+  },
+  "peerDependencies": {
+    "typebox": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  }
+}

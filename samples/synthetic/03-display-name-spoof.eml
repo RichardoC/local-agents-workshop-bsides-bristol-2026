@@ -1,0 +1,26 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from mail.bulk-sender-3x.example (mail.bulk-sender-3x.example [203.0.113.188])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Authentication-Results: imap-01.recipient.example;
+	spf=pass smtp.mailfrom=bulk-sender-3x.example;
+	dkim=pass header.d=bulk-sender-3x.example;
+	dmarc=pass header.from=bulk-sender-3x.example
+Return-Path: <alerts@bulk-sender-3x.example>
+From: "helpdesk@recipient.example" <alerts@bulk-sender-3x.example>
+To: staff@recipient.example
+Subject: Action required: mailbox storage exceeded
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.9a04c@bulk-sender-3x.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Your mailbox has exceeded its storage quota.
+
+Reply to this message with your staff number and the IT team will
+increase your allocation within one working day.
+
+IT Helpdesk

@@ -1,0 +1,19 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from relay.internal-legacy.example (relay.internal-legacy.example [192.0.2.19])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Return-Path: <reports@internal-legacy.example>
+From: Nightly Reports <reports@internal-legacy.example>
+To: ops@recipient.example
+Subject: Batch job 2291 completed
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.3c8e1@internal-legacy.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Batch job 2291 completed at 03:14 with 0 errors.
+
+-- automated message, do not reply

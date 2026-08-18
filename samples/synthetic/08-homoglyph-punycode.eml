@@ -1,0 +1,38 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from smtp.mail-forward-71.example (smtp.mail-forward-71.example [192.0.2.144])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Authentication-Results: imap-01.recipient.example;
+	spf=pass smtp.mailfrom=mail-forward-71.example;
+	dkim=pass header.d=mail-forward-71.example;
+	dmarc=pass header.from=mail-forward-71.example
+Return-Path: <billing@mail-forward-71.example>
+From: Billing <billing@mail-forward-71.example>
+To: recipient@recipient.example
+Subject: Receipt for your recent payment
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.8e5c2@mail-forward-71.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_Part_8812_1739204411"
+
+------=_Part_8812_1739204411
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Your payment of GBP 149.99 has been processed.
+
+If you did not authorise this, cancel here:
+https://pаypal.com/dispute
+
+------=_Part_8812_1739204411
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+<html><body>
+<p>Your payment of GBP 149.99 has been processed.</p>
+<p><a href="https://pаypal.com/dispute">Cancel this payment</a></p>
+</body></html>
+
+------=_Part_8812_1739204411--
