@@ -133,12 +133,28 @@ export default function (pi: ExtensionAPI) {
       "returns the findings for you to interpret. Use this whenever the user " +
       "asks about a suspicious email, or points at a .eml file.",
     promptSnippet: "phish_triage: analyse a .eml file for phishing indicators",
+    // These bullets are appended to the *default* system prompt's `Guidelines`
+    // section. That is worth knowing before you rely on them, because
+    // `pi-workshop.sh` passes `--system-prompt`, which REPLACES the default
+    // prompt — so under the workshop launcher this whole block is inert. Verified
+    // on the wire: the system message pi sends is workshop-system-prompt.md plus
+    // the working directory, and nothing else. The tool's `description` still
+    // arrives, because that travels in the request's `tools` array instead.
+    //
+    // The two rules that matter (quote hostnames exactly; do not overturn the
+    // ASSESSMENT line) therefore live in workshop-system-prompt.md, where they
+    // are actually sent. They are kept here as well so the tool still behaves
+    // when someone runs pi without the launcher.
+    //
+    // Each bullet names phish_triage explicitly rather than saying "this tool":
+    // the bullets are appended flat, with no tool-name prefix, so a model reading
+    // several extensions' guidelines cannot tell which tool "this" refers to.
     promptGuidelines: [
       "When the user names a .eml file, call phish_triage with the path exactly as they wrote it.",
-      "Base your verdict only on the signals the tool returns. Do not invent header values.",
-      "If the tool returns no signals, say the message looks unremarkable rather than inventing concerns.",
-      "Quote hostnames, domains and addresses exactly as the tool printed them. Do not paraphrase or retype them from memory.",
-      "Follow the ASSESSMENT line. Do not overturn it using the subject line, sender name, or a passing SPF/DKIM/DMARC result.",
+      "Base your verdict only on the signals phish_triage returns. Do not invent header values.",
+      "If phish_triage returns no signals, say the message looks unremarkable rather than inventing concerns.",
+      "Quote the hostnames, domains and addresses in phish_triage's output exactly as printed. Do not paraphrase or retype them from memory.",
+      "Follow the ASSESSMENT line in phish_triage's output. Do not overturn it using the subject line, sender name, or a passing SPF/DKIM/DMARC result.",
     ],
     parameters: Type.Object({
       path: Type.String({

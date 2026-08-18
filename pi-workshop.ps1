@@ -8,7 +8,8 @@
 #   .\pi-workshop.ps1 -p "your question"     one-shot
 #   .\pi-workshop.ps1 --no-model             start without a model server
 #
-# Two models are configured. Pick one with WORKSHOP_MODEL; the default is Bonsai
+# Two models are configured. Pick one with WORKSHOP_MODEL; otherwise the launcher
+# matches whichever weights the server has loaded, falling back to Granite
 # because it is the smaller download:
 #   $env:WORKSHOP_MODEL = "granite-3b"; .\pi-workshop.ps1
 # Whichever you pick, the llamafile you are running must be the matching one.
@@ -30,7 +31,8 @@ Set-Location -Path $PSScriptRoot
 # Which of the models in .pi\agent\models.json to use. Both are configured with
 # the same 16384-token context window, so the server command is identical either
 # way — only the .llamafile you run differs.
-$workshopModel    = if ($env:WORKSHOP_MODEL)    { $env:WORKSHOP_MODEL }    else { "bonsai-8b" }
+$modelWasExplicit = [bool]$env:WORKSHOP_MODEL
+$workshopModel    = if ($env:WORKSHOP_MODEL)    { $env:WORKSHOP_MODEL }    else { "granite-3b" }
 $workshopProvider = if ($env:WORKSHOP_PROVIDER) { $env:WORKSHOP_PROVIDER } else { "local" }
 
 # --no-model: skip the health check and start anyway. /phish still works, since
@@ -96,6 +98,37 @@ a REPLACE-ME placeholder.
 }
 
 if ($requireModel) {
+    # Take the URL from models.json rather than hardcoding one. If someone edits
+    # baseUrl -- which the hosted contingency explicitly asks them to do -- a check
+    # against a fixed 127.0.0.1:8080 can pass while pi connects somewhere dead, and
+    # pi's failure for that is a bare "Connection error." with no URL in it.
+    $healthUrl = "http://127.0.0.1:8080"
+    if (Test-Path ".pi\agent\models.json") {
+        try {
+            $localBase = (Get-Content ".pi\agent\models.json" -Raw | ConvertFrom-Json).providers.local.baseUrl
+            if ($localBase) { $healthUrl = $localBase -replace '/v1/*$','' }
+        } catch { }
+    }
+
+    # If WORKSHOP_MODEL was not set, ask the server which weights it loaded and
+    # match them. llamafile serves whatever it opened and ignores the model field
+    # in the request, so running the Granite llamafile while pi is told bonsai-8b
+    # gives confident answers from the wrong model with no error anywhere -- and
+    # applies the wrong sampling too, since Granite is greedy and Bonsai is not.
+    if ((-not $modelWasExplicit) -and $workshopProvider -eq "local") {
+        try {
+            $np = if ($PSVersionTable.PSVersion.Major -ge 7) { @{ NoProxy = $true } } else { @{} }
+            $pr = Invoke-RestMethod -Uri "$healthUrl/props" -TimeoutSec 5 -ErrorAction Stop @np
+            $lp = "$($pr.model_path)".ToLower()
+            $detected = if ($lp -match "granite") { "granite-3b" } elseif ($lp -match "bonsai") { "bonsai-8b" } else { $null }
+            if ($detected -and $detected -ne $workshopModel) {
+                Write-Host "Using --model $detected`: the server has $(Split-Path $pr.model_path -Leaf) loaded." -ForegroundColor DarkGray
+                Write-Host "Set `$env:WORKSHOP_MODEL to override." -ForegroundColor DarkGray
+                $workshopModel = $detected
+            }
+        } catch { }
+    }
+
     try {
         # PowerShell 7+ has -NoProxy, which genuinely bypasses a configured proxy
         # for this request. 5.1 has no equivalent: passing -Proxy $null there is
@@ -103,12 +136,15 @@ if ($requireModel) {
         # Windows proxy configs bypass loopback anyway, so 5.1 usually works; if
         # it does not, that is what the NO_PROXY advice in the README is for.
         $noProxy = if ($PSVersionTable.PSVersion.Major -ge 7) { @{ NoProxy = $true } } else { @{} }
-        Invoke-WebRequest -Uri "http://127.0.0.1:8080/health" `
+        Invoke-WebRequest -Uri "$healthUrl/health" `
             -UseBasicParsing -TimeoutSec 5 @noProxy | Out-Null
     }
     catch {
         Write-Host -ForegroundColor Red @"
-The model server is not responding on http://127.0.0.1:8080
+The model server is not responding on $healthUrl
+
+That URL comes from baseUrl in .pi\agent\models.json, which is where pi will
+connect. If it is not what you expected, that file is what to fix.
 
 Start it first, in another terminal:
   .\bonsai.llamafile.exe --server --gpu disable -c 16384 -np 1
@@ -130,6 +166,22 @@ $extArgs = @()
 Get-ChildItem -Path "extensions" -Filter "*.ts" -File -ErrorAction SilentlyContinue | ForEach-Object {
     $extArgs += "-e"
     $extArgs += "./extensions/$($_.Name)"
+}
+
+# Skills the same way, and for the same reason. package.json does declare
+# pi.skills, but package skill discovery requires the project to be trusted
+# first, so on a fresh clone the skills are silently absent. Passing --skill is
+# documented and unconditional.
+#
+# WORKSHOP_SKILLS=0 skips them. A skill is text prepended to the system prompt,
+# so on a very slow machine it costs prompt-processing time on every turn.
+if ($env:WORKSHOP_SKILLS -ne "0") {
+    Get-ChildItem -Path "skills" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        if (Test-Path (Join-Path $_.FullName "SKILL.md")) {
+            $extArgs += "--skill"
+            $extArgs += "./skills/$($_.Name)"
+        }
+    }
 }
 
 # pi's default system prompt is written for large cloud models: it is long, and

@@ -82,7 +82,7 @@ try {
     # "not supplied" and the WinINET proxy still applies). Loopback is normally
     # bypassed anyway; the Network check below flags it when it might not be.
     $noProxy = if ($PSVersionTable.PSVersion.Major -ge 7) { @{ NoProxy = $true } } else { @{} }
-    $props = Invoke-RestMethod -Uri "http://127.0.0.1:8080/props" -TimeoutSec 5 @noProxy
+    $props = Invoke-RestMethod -Uri "http://127.0.0.1:8080/props" -TimeoutSec 5 -ErrorAction Stop @noProxy
 } catch { }
 
 if (-not $props) {
@@ -94,9 +94,37 @@ if (-not $props) {
     $nCtx = $props.default_generation_settings.n_ctx
     $slots = $props.total_slots
 
+    # Which weights the server ACTUALLY loaded. llamafile serves whatever it
+    # opened and ignores the model field in the request, so running the Granite
+    # llamafile while pi is told bonsai-8b fails silently: confident answers,
+    # wrong model. This is doctor.sh:122 ported over -- Windows users could not
+    # detect the mismatch the README warns them about.
+    $loaded = $props.model_path
+    if ($loaded) {
+        $leaf = Split-Path $loaded -Leaf
+        $match = @()
+        if (Test-Path ".pi\agent\models.json") {
+            foreach ($m in (Get-Content ".pi\agent\models.json" -Raw | ConvertFrom-Json).providers.local.models) {
+                if ($leaf -match [regex]::Escape($m.id.Split('-')[0])) { $match += $m.id }
+            }
+        }
+        if ($match.Count -eq 1) {
+            Ok "Server has $leaf loaded — use:  --model $($match[0])"
+        } else {
+            Warn "Server has $leaf loaded" "Make sure the --model id you pass matches these weights. llamafile ignores the model field in the request, so a mismatch is silent."
+        }
+    }
+
+    # Only the LOCAL provider's entries describe this server. The hosted entries
+    # carry the models' full native context on purpose (65536 and 131072), so
+    # comparing against those would report a mismatch that does not exist.
     $cfgCtx = $null
     if (Test-Path ".pi\agent\models.json") {
-        $cfgCtx = (Get-Content ".pi\agent\models.json" -Raw | ConvertFrom-Json).providers.local.models[0].contextWindow
+        $localCtx = (Get-Content ".pi\agent\models.json" -Raw | ConvertFrom-Json).providers.local.models.contextWindow | Sort-Object -Unique
+        $cfgCtx = @($localCtx)[0]
+        if (@($localCtx).Count -gt 1) {
+            Warn "Local models in models.json disagree on contextWindow: $($localCtx -join ', ')" "Checking against $cfgCtx. Set them all to the same value, or match the server's -c to the model you pass."
+        }
     }
 
     if ($nCtx -and $cfgCtx) {
@@ -161,6 +189,62 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
     }
 } else {
     Warn "node not installed" "Not required. pi runs the extension without it; you just cannot run npm test or the triage CLI."
+}
+
+# --- Publishing -------------------------------------------------------------
+#
+# The session's stated goal is that you leave with something published. Every
+# check here fails at 15:00 if it is not sorted out beforehand, and 15:00 is far
+# too late — all of it is silent until the moment you need it.
+#
+# This matters more on Windows than anywhere else: a fresh Git for Windows
+# install has no author identity and no init.defaultBranch, so both of the
+# failures below are the DEFAULT state of a new machine.
+
+Section "Publishing (the goal of the session)"
+
+$git = Get-Command git -ErrorAction SilentlyContinue
+if (-not $git) {
+    Bad "git not installed" "Install Git for Windows, or plan to pair with a neighbour when we publish."
+} else {
+    $gitVer = (git --version) -replace '^git version ',''
+    Ok "git $gitVer"
+
+    $gName = (git config --get user.name)   2>$null
+    $gMail = (git config --get user.email)  2>$null
+    if ([string]::IsNullOrWhiteSpace($gName) -or [string]::IsNullOrWhiteSpace($gMail)) {
+        Bad "git has no author identity — 'git commit' will refuse to run" 'git config --global user.name "Your Name"; git config --global user.email "you@example.com"'
+    } else {
+        Ok "git identity: $gName <$gMail>"
+    }
+
+    # Silent until 15:00, then it fails for the whole room at once. `git init`
+    # with no init.defaultBranch creates `master`, and every instruction pushes
+    # `main`:  error: src refspec main does not match any
+    $defBranch = (git config --get init.defaultBranch) 2>$null
+    if ([string]::IsNullOrWhiteSpace($defBranch)) {
+        Warn "git has no init.defaultBranch, so 'git init' will create 'master' not 'main'" "Harmless if you use 'git init -b main' as the instructions say. To stop thinking about it:  git config --global init.defaultBranch main"
+    } else {
+        Ok "git init.defaultBranch: $defBranch"
+    }
+}
+
+if (Get-Command gh -ErrorAction SilentlyContinue) {
+    gh auth status *> $null
+    if ($LASTEXITCODE -eq 0) {
+        Ok "gh is authenticated — 'gh repo create --public --source=. --push' will work"
+    } else {
+        Warn "gh is installed but not authenticated" "Run it now, not at 15:00:  gh auth login"
+    }
+} else {
+    Warn "gh (GitHub CLI) not installed — optional, but it removes the hardest step" "Without it you need a personal access token: GitHub has not accepted a password over HTTPS since 2021."
+}
+
+try {
+    $null = Invoke-WebRequest -Uri "https://github.com" -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop
+    Ok "github.com is reachable"
+} catch {
+    Warn "cannot reach github.com" "Conference wifi may be filtering it, or a captive portal is intercepting TLS. Use a phone hotspot. Do NOT disable certificate verification."
 }
 
 # --- Summary ----------------------------------------------------------------

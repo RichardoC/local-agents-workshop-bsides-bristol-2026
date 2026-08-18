@@ -55,11 +55,32 @@ generation, on the same machine.** That is the opposite of what the parameter
 counts suggest, and it is the single most consequential difference between them.
 Prompt processing is what makes a local agent feel broken: at 5.8 tok/s a
 2,000-token conversation costs about six minutes before the model says anything,
-and it is what drives the request-timeout failures documented in
-[small-model-tuning.md](small-model-tuning.md). At 30 tok/s the same turn is
-about one minute. Q1_0 saves bytes on disk and spends them on arithmetic.
+and it is what drives the request timeouts described in the README. At 30 tok/s
+the same turn is about one minute. Q1_0 saves bytes on disk and spends them on arithmetic.
 
-### RAM at a 10,240-token window
+### RAM at the 16,384-token window the workshop uses
+
+Measured, not extrapolated: real llamafiles, `--server --gpu disable -c 16384
+-np 1`, RSS read from `/proc/<pid>/status` after a completed query so the KV cache
+is populated rather than merely reserved.
+
+| | Bonsai 8B Q1_0 | Granite 4.1 3B Q6_K |
+|---|---|---|
+| Resident total (what `top` shows) | **3.33 GiB** | 4.09 GiB |
+| — anonymous: KV cache and buffers | 2.30 GiB | **1.48 GiB** |
+| — file-backed: mmapped weights | **1.02 GiB** | 2.61 GiB |
+
+**The totals invert the safety story, so read the split.** Granite needs more
+memory overall, but two thirds of it is file-backed weight pages the kernel can
+drop and re-read. Bonsai's total is smaller while its *anonymous* footprint is
+1.6× larger — and anonymous memory is the kind that cannot be evicted. On a
+genuinely memory-tight machine, the model with the bigger number is the safer
+choice, which is not what the headline figure suggests.
+
+### RAM at a 10,240-token window, for comparison
+
+Kept because the per-1,000-token KV rate is what lets you predict any other
+window size, including the full-context figures below.
 
 | | Bonsai 8B Q1_0 | Granite 4.1 3B Q6_K |
 |---|---|---|
@@ -105,11 +126,19 @@ roughly 4.6 GiB of KV for Bonsai, 2.6 GiB for Granite.
 
 ### What this means for the workshop
 
-The workshop uses **16,384**, which is comfortable for both — about 2.3 GiB of KV
-for Bonsai and 1.3 GiB for Granite, so 8 GB of RAM is enough with a browser open.
-If you are on 8 GB and it struggles, drop to `-c 8192` — and change
-`contextWindow` in `.pi/agent/models.json` to match, or you hit the silent
-one-token failure the README describes.
+The workshop uses **16,384**, measured above at 3.33 GiB resident for Bonsai and
+4.09 GiB for Granite.
+
+On 8 GB that is workable but not roomy: 4.09 GiB plus a browser and an IDE is most
+of the machine, and the number that actually decides whether it survives is the
+anonymous half — 2.30 GiB for Bonsai, 1.48 GiB for Granite — because that is the
+part the kernel cannot page out. **If you are on 8 GB, prefer Granite**, which is
+the counter-intuitive half of the earlier table: the larger total is the safer one
+because most of it is evictable.
+
+If it still struggles, drop to `-c 8192` — and change `contextWindow` in
+`.pi/agent/models.json` to match, or you hit the silent one-token failure the
+README describes.
 
 ## The honest caveat
 
@@ -156,17 +185,31 @@ sensible ceiling.
 
 ## Sampling
 
-Both are pinned to the same values, and this was tested rather than assumed:
+The two models are **not** pinned to the same values, because their vendors
+document different things:
 
 ```json
-"samplingParams": { "temperature": 0.2, "top_p": 0.9, "top_k": 40, "repeat_penalty": 1.05 }
+"granite-3b": { "temperature": 0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "repeat_penalty": 1.0 }
+"bonsai-8b":  { "temperature": 0.2, "top_p": 0.9, "top_k": 20, "min_p": 0.0, "repeat_penalty": 1.0 }
 ```
 
-Temperature 0.2 despite Bonsai's model card recommending 0.5–0.7, because we are
-asking the model to report findings, not to write imaginatively. A full A/B at
-0.6 on 25 real messages produced no measurable improvement and introduced new
-garbles, so 0.2 stays. Granite's server default is 0.8; we override it for the
-same reason.
+Granite is greedy because that is IBM's declared default: its
+`generation_config.json` sets no sampling fields at all, and every official
+example calls `generate()` with no sampling arguments, which in transformers means
+`do_sample=False`. Bonsai follows its card's published table (top-k 20, top-p 0.9,
+repetition penalty 1.0), except temperature — the card says 0.5 and we use 0.2,
+because the task is reporting a tool's findings rather than writing prose. An A/B
+at 0.6 over 25 real messages showed no improvement and introduced new garbles.
+
+`min_p` is stated explicitly for both, and it is the easiest of these to get
+wrong. llama.cpp defaults it to `0.05` (`common/common.h`), so a configuration
+that sets `temperature` and `top_p` while saying nothing about `min_p` leaves a
+truncation sampler running that nobody chose. Setting it to `0` is what actually
+makes greedy greedy.
+
+Both configurations were verified on the wire: pi merges `samplingParams`
+verbatim, and a captured request carries `temperature 0, top_p 1, top_k 0,
+min_p 0, repeat_penalty 1` for Granite.
 
 ## Running either one
 

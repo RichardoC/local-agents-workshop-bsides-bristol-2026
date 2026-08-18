@@ -24,7 +24,7 @@ Content-Transfer-Encoding: 8bit
 Your payment of GBP 149.99 has been processed.
 
 If you did not authorise this, cancel here:
-https://pаypal.com/dispute
+https://pаypal.example/dispute
 
 ------=_Part_8812_1739204411
 Content-Type: text/html; charset="utf-8"
@@ -32,7 +32,7 @@ Content-Transfer-Encoding: 8bit
 
 <html><body>
 <p>Your payment of GBP 149.99 has been processed.</p>
-<p><a href="https://pаypal.com/dispute">Cancel this payment</a></p>
+<p><a href="https://pаypal.example/dispute">Cancel this payment</a></p>
 </body></html>
 
 ------=_Part_8812_1739204411--

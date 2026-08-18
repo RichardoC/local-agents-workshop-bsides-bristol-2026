@@ -142,7 +142,17 @@ else
   n_ctx=$(printf '%s' "$props" | tr ',{}' '\n\n\n' | grep -o '"n_ctx"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*$' | head -1)
   slots=$(printf '%s' "$props" | tr ',{}' '\n\n\n' | grep -o '"total_slots"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*$' | head -1)
 
-  cfg_ctx=$(grep -o '"contextWindow"[[:space:]]*:[[:space:]]*[0-9]*' .pi/agent/models.json 2>/dev/null | grep -o '[0-9]*$' | head -1)
+  # Only the LOCAL provider's entries describe this server. The hosted entries
+  # deliberately carry the models' full native context (65536 and 131072), so a
+  # plain `head -1` over the whole file would compare the local server's -c
+  # against a hosted window and report a mismatch that does not exist.
+  local_section=$(sed -n '1,/"hosted"/p' .pi/agent/models.json 2>/dev/null)
+  cfg_ctx_all=$(printf '%s' "$local_section" | grep -o '"contextWindow"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*$' | sort -u)
+  cfg_ctx=$(printf '%s' "$cfg_ctx_all" | head -1)
+  if [ "$(printf '%s\n' "$cfg_ctx_all" | grep -c .)" -gt 1 ]; then
+    warns "Local models in models.json disagree on contextWindow: $(printf '%s' "$cfg_ctx_all" | tr '\n' ' ')" \
+          "Checking against $cfg_ctx. Set them all to the same value, or pass WORKSHOP_MODEL and match the server's -c to that model."
+  fi
 
   if [ -n "$n_ctx" ] && [ -n "$cfg_ctx" ]; then
     if [ "$n_ctx" = "$cfg_ctx" ]; then
@@ -237,6 +247,16 @@ else
         "git config --global user.name \"Your Name\" && git config --global user.email \"you@example.com\""
   else
     ok "git identity: $(git config --get user.name) <$(git config --get user.email)>"
+  fi
+
+  # Silent until 15:00, then it fails for the whole room at once. `git init` with
+  # no init.defaultBranch creates `master`, and every instruction pushes `main`:
+  #   error: src refspec main does not match any
+  if [ -z "$(git config --get init.defaultBranch 2>/dev/null)" ]; then
+    warns "git has no init.defaultBranch, so 'git init' will create 'master' not 'main'" \
+          "Harmless if you use 'git init -b main' as the instructions say. To stop thinking about it:  git config --global init.defaultBranch main"
+  else
+    ok "git init.defaultBranch: $(git config --get init.defaultBranch)"
   fi
 fi
 
