@@ -27,7 +27,7 @@ does not.
       analysed — a cold first run in front of forty people takes minutes.
 - [ ] `./doctor.sh` output on screen as people come in. It tells them what to run
       and it advertises that the check exists.
-- [ ] USB sticks with **`granite.llamafile`** (the recommended model), plus
+- [ ] USB sticks with **`granite.llamafile`** (the default and recommended model), plus
       `bonsai.llamafile` for anyone short on disk, and all six pi release
       archives. Assume the wifi will fail. This is the single highest-value thing
       you can bring. 2.93 GiB over USB beats 2.93 GiB over hotel wifi by a margin
@@ -87,6 +87,18 @@ Hand out the sample table from the README and let them play. Suggested order:
 
 1. `01-clean-newsletter.eml` — legitimate. Does the model correctly say so, or
    does it manufacture a concern to seem useful? This is the interesting one.
+
+   **Know what to expect here, because it is subtler than pass/fail.** The model
+   does reach the right verdict, and it embellishes getting there — observed
+   output describes "a legitimate-looking newsletter sender address" and "a benign
+   link to a known domain". The tool said neither of those things, and
+   `bristol-tech.example` is not a known domain. It is reading the subject line
+   and the sender name, which is precisely the habit this session argues against.
+
+   That is a gift, not a problem: **right answer, wrong reasons.** Ask the room to
+   compare the model's prose against the tool output above it and find the claims
+   the tool never made. It is the sharpest version of the whole lesson, and it only
+   works if you are expecting it.
 2. `06-brand-in-subdomain.eml` — `paypal.com.account-verify-4471.example`. Ask
    the room to read it right-to-left the way a resolver does.
 3. `08-homoglyph-punycode.eml` — nobody spots the Cyrillic а by eye. Nobody.
@@ -167,6 +179,11 @@ Warm-up, in the existing codebase. Add a check to `lib/signals.ts` and a test to
 `lib/signals.test.ts`. This runs entirely without a model, so the whole room can
 do it regardless of setup state — **say that out loud again.**
 
+One caveat to say with it: `npm test` needs Node 22.6 or newer, because the tests
+are TypeScript run without a build step. Anyone with no Node, or older Node,
+checks their work with `/phish <file>` in pi instead. Same check, same result, no
+test runner — they have not failed at anything.
+
 Point at the `ADD YOUR OWN CHECK HERE` comment in `lib/signals.ts`. It exists so
 that nobody has to decide where to start typing.
 
@@ -217,7 +234,7 @@ authentication. Budget for that rather than discovering it.
 ```bash
 cp -r templates/starter ../my-extension
 cd ../my-extension
-git init && git add -A && git commit -m "Initial extension"
+git init -b main && git add -A && git commit -m "Initial extension"
 ```
 
 Now publish. **Push the `gh` path first** — it replaces a browser round-trip with
@@ -263,6 +280,13 @@ else's extension load on your machine, ninety seconds after they pushed it, is
 the moment the afternoon clicks.
 
 ## 15:25 — Build (25 min)
+
+**Already ahead, or bored?** There is a second track nobody finds on their own:
+`templates/starter-skill/` is a skill package rather than a tool, and
+`skills/stride-threat-model/` is a worked example of one. A skill is instructions,
+not code — no TypeScript at all — which makes it the better path for anyone strong
+on security and light on programming. The launcher loads every skill in `skills/`,
+so paste a design document at the agent and watch it produce a STRIDE table.
 
 Now they extend their own thing. The template's `word_count` is a placeholder to
 be replaced. Same rule as everything else: deterministic core in `lib/`, thin pi
@@ -315,6 +339,8 @@ checks them.
 | Machine far too slow to be usable, or cannot run the binary at all | 8 GB RAM and a browser open, ancient CPU, or a managed laptop that blocks unsigned executables | If a hosted endpoint has been set up: `export HF_TOKEN=... ; WORKSHOP_PROVIDER=hosted WORKSHOP_MODEL=granite-3b-hosted ./pi-workshop.sh`. Otherwise `--no-model` plus `/phish`, and pair them with a neighbour for the agent half. |
 | `Exec format error` / `run-detectors: unable to find an interpreter` | APE binary handed to the wrong interpreter (common with WINE installed, and under WSL) | `sh ./bonsai.llamafile --server ...` — works everywhere |
 | Hangs before any output | Corporate proxy intercepting 127.0.0.1 | `NO_PROXY=127.0.0.1,localhost` (the launcher sets it) |
+| `git init -b main`: `unknown switch 'b'` | git older than 2.28 | `git init && git add -A && git commit -m "Initial extension" && git branch -M main` |
+| `error: src refspec main does not match any` | They ran plain `git init`, which creates `master`, then pushed `main` | `git branch -M main` then push again. `doctor.sh` warns when `init.defaultBranch` is unset. |
 | `pi: command not found` | Static build not extracted, or extracted elsewhere | Extract so `./pi/pi` exists, or set `PI_BIN` |
 | Windows: script will not run | Execution policy | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` |
 | Windows: llamafile will not start | Missing `.exe` extension | Rename to `bonsai.llamafile.exe` |
@@ -341,9 +367,26 @@ complete every exercise through 15:25 and publish normally.
 **Room is much slower than expected.** Drop the 15:25 build block and let the
 15:00 publish run long. Publishing is the goal; building is the enjoyable part.
 
-**Room is much faster than expected.** Push people at the corpus: run their new
-signal across all 8,600 samples and look at the false positives. That question —
-"why does this fire on legitimate mail?" — is where the real learning is.
+**Room is much faster than expected.** Push people at the corpus:
+
+```bash
+npm run triage -- samples/phishing_pot/email/*.eml --json > /tmp/out.json
+```
+
+Ask them to read the *hosts and headers their signal fired on* and decide whether
+each hit is the mechanism they meant to catch or something incidental that happens
+to correlate.
+
+Phrase it that way rather than "find the false positives", because **the corpus is
+100% phishing** — it is a honeypot collection, with no legitimate mail in it at
+all. There is no ham to measure precision against, so every hit is arguably a true
+positive and a hunt for false positives has no answer. What the corpus *can* tell
+you is whether a signal fires for the reason you intended, which is the more
+useful question anyway.
+
+Say the limitation out loud if it comes up. "We measured recall and eyeballed
+precision" is the honest description of every number in this repo, and noticing
+that is a better lesson than any of the numbers.
 
 **A machine has no Node.** Fine. pi is a static binary and bundles what
 extensions import. They lose `npm test` and `npm run triage`, nothing else.

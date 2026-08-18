@@ -124,7 +124,10 @@
         "is the same server the local llamafile runs.",
         "",
         "To use it:",
-        "  1. Replace REPLACE-ME below with the endpoint host.",
+        "  1. Replace REPLACE-ME with the WHOLE host from the endpoint page, keeping",
+        "     the /v1 suffix. It includes the region and the cloud, so it looks",
+        "     like abc123def456.eu-west-1.aws.endpoints.huggingface.cloud -- not",
+        "     just a name in front of endpoints.huggingface.cloud.",
         "  2. export HF_TOKEN=hf_...    (the token is read from the environment and",
         "     never stored in this file — do not paste it here, it would be",
         "     committed.)",
@@ -145,7 +148,7 @@
         "A hosted endpoint scaled to zero returns HTTP 503 until it wakes, which",
         "takes a minute or two. That is not a misconfiguration; retry."
       ],
-      "baseUrl": "https://REPLACE-ME.endpoints.huggingface.cloud/v1",
+      "baseUrl": "https://REPLACE-ME/v1",
       "apiKey": "$HF_TOKEN",
       "api": "openai-completions",
       "compat": {

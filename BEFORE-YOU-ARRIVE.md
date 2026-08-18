@@ -18,7 +18,7 @@ Pick one. Both work; the trade-off is download size against speed.
 |---|---|---|
 | Download | 2.93 GiB | **1.41 GiB** |
 | Prompt speed, CPU-only | **~30 tok/s** | ~5.8 tok/s |
-| RAM while running | ~3.5 GiB | **~2.6 GiB** |
+| RAM while running | 4.1 GiB | **3.3 GiB** |
 
 **Take Granite unless the download is a problem for you** — metered connection,
 slow line, not much disk. It is roughly five times faster on a machine with no

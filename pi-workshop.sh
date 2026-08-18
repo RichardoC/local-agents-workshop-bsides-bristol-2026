@@ -29,7 +29,11 @@ cd "$(dirname "$0")"
 # share a 16384-token context window, so the server command is identical either
 # way — only the .llamafile you run differs.
 WORKSHOP_PROVIDER="${WORKSHOP_PROVIDER:-local}"
-WORKSHOP_MODEL="${WORKSHOP_MODEL:-bonsai-8b}"
+# If the user set WORKSHOP_MODEL, that wins. If not, the launcher asks the server
+# which weights it loaded and matches them (see below), and this is the fallback
+# for when it cannot tell.
+WORKSHOP_MODEL_EXPLICIT="${WORKSHOP_MODEL:-}"
+WORKSHOP_MODEL="${WORKSHOP_MODEL:-granite-3b}"
 
 # --no-model: skip the health check and start anyway. /phish still works, since
 # it never calls the model. Anything you type at the agent will fail, which is
@@ -96,10 +100,51 @@ EOF
   fi
 fi
 
+# Health-check the URL pi will actually dial, not a hardcoded one. If someone
+# edits baseUrl -- which the hosted contingency explicitly asks them to do -- a
+# check against a fixed 127.0.0.1:8080 can pass while pi connects somewhere dead,
+# and pi's failure for that is a bare "Connection error." with no URL in it.
+health_url=$(sed -n '1,/"hosted"/p' .pi/agent/models.json 2>/dev/null \
+  | grep -o '"baseUrl"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 \
+  | sed 's/.*"\(https\{0,1\}:[^"]*\)".*/\1/; s|/v1/*$||' || true)
+health_url="${health_url:-http://127.0.0.1:8080}"
+
+# If WORKSHOP_MODEL was not set explicitly, ask the server which weights it has
+# and pick the matching id. This removes an entire class of silent failure:
+# llamafile serves whatever it loaded and ignores the model field in the request,
+# so running the Granite llamafile while pi is told `bonsai-8b` produces
+# confident answers from the wrong model, with no error anywhere. The two also
+# want different sampling -- Granite is greedy, Bonsai is not -- so a mismatch
+# silently applies the wrong one.
+if [ -z "${WORKSHOP_MODEL_EXPLICIT:-}" ] && [ "$require_model" -eq 1 ] && [ "$WORKSHOP_PROVIDER" = "local" ]; then
+  # `|| true` is load-bearing: under `set -e`, an assignment whose command
+  # substitution fails takes the script down with it. When the server is not
+  # running, curl fails and grep matches nothing, so without this the launcher
+  # exits silently -- no message, no exit code anyone can read -- instead of
+  # reaching the "server is not responding" advice twenty lines below.
+  loaded=$(curl -sf --noproxy 127.0.0.1 --max-time 5 "$health_url/props" 2>/dev/null \
+    | tr ',{}' '\n\n\n' | grep -o '"model_path"[[:space:]]*:[[:space:]]*"[^"]*"' \
+    | sed 's/.*"\([^"]*\)"$/\1/' | head -1 || true)
+  case "$(printf '%s' "$loaded" | tr 'A-Z' 'a-z')" in
+    *granite*) detected=granite-3b ;;
+    *bonsai*)  detected=bonsai-8b ;;
+    *)         detected="" ;;
+  esac
+  if [ -n "$detected" ] && [ "$detected" != "$WORKSHOP_MODEL" ]; then
+    printf 'Using --model %s: the server has %s loaded.\n' \
+      "$detected" "$(basename "$loaded")" >&2
+    printf 'Set WORKSHOP_MODEL to override.\n' >&2
+    WORKSHOP_MODEL="$detected"
+  fi
+fi
+
 if [ "$require_model" -eq 1 ] &&
-   ! curl -sf --noproxy 127.0.0.1 http://127.0.0.1:8080/health > /dev/null 2>&1; then
-  cat >&2 <<'EOF'
-The model server is not responding on http://127.0.0.1:8080
+   ! curl -sf --noproxy 127.0.0.1 "$health_url/health" > /dev/null 2>&1; then
+  cat >&2 <<EOF
+The model server is not responding on $health_url
+
+That URL comes from baseUrl in .pi/agent/models.json, which is where pi will
+connect. If it is not what you expected, that file is what to fix.
 
 Start it first, in another terminal:
   ./bonsai.llamafile --server --gpu disable -c 16384 -np 1
@@ -122,6 +167,21 @@ for f in extensions/*.ts; do
   [ -e "$f" ] || continue
   ext_args+=(-e "./$f")
 done
+
+# Skills the same way, and for the same reason. `package.json` does declare
+# `pi.skills`, but package skill discovery requires the project to be trusted
+# first, so on a fresh clone the skills are silently absent -- verified: without
+# this loop the agent reports no skills at all. Passing --skill is documented and
+# unconditional.
+#
+# WORKSHOP_SKILLS=0 skips them. A skill is text prepended to the system prompt,
+# so on a very slow machine it is real prompt-processing time on every turn.
+if [ "${WORKSHOP_SKILLS:-1}" != "0" ]; then
+  for d in skills/*/; do
+    [ -f "$d/SKILL.md" ] || continue
+    ext_args+=(--skill "./${d%/}")
+  done
+fi
 
 # pi's default system prompt is written for large cloud models: it is long, and
 # on a small local model it both costs a lot of prompt-processing time and tends
