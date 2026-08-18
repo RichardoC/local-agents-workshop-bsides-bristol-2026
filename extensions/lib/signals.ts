@@ -201,6 +201,48 @@ export function editDistance(a: string, b: string, cap = Infinity): number {
 }
 
 /**
+ * Fold characters chosen for visual similarity onto a single representative.
+ *
+ * Typosquatting is not random: an attacker picks the substitution that survives
+ * a glance. Digit-for-letter (paypa1, micros0ft), doubled-letter-for-letter
+ * (rnicrosoft for microsoft, vvhatsapp for whatsapp), and l/i confusion account
+ * for most of it. Normalising all of them onto one skeleton turns "does this
+ * look like the brand?" into a plain string comparison.
+ *
+ *   confusableSkeleton("paypa1")     === confusableSkeleton("paypal")
+ *   confusableSkeleton("micros0ft")  === confusableSkeleton("microsoft")
+ *   confusableSkeleton("rnicrosoft") === confusableSkeleton("microsoft")
+ *
+ * That last one is why this exists: rn -> m is two edits, so edit distance
+ * cannot see it at any threshold a real corpus tolerates. This is the right
+ * tool for the job and it costs one pass over a short string.
+ *
+ * Multi-character rules run first, because folding 1 -> i would otherwise stop
+ * "cl" -> "d" and "rn" -> "m" from ever matching.
+ *
+ * This is a good place to extend: Cyrillic and Greek lookalikes (а, о, е, ѕ) are
+ * not handled here at all — punycode_link catches those from a different angle.
+ */
+export function confusableSkeleton(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/rn/g, "m")
+    .replace(/vv/g, "w")
+    .replace(/cl/g, "d")
+    .replace(/[1l]/g, "i")
+    .replace(/0/g, "o")
+    .replace(/5/g, "s")
+    .replace(/3/g, "e")
+    .replace(/4/g, "a")
+    .replace(/7/g, "t")
+    .replace(/8/g, "b")
+    .replace(/9/g, "g")
+    .replace(/2/g, "z")
+    .replace(/\$/g, "s")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
  * Detect a non-ASCII (homoglyph) domain using nothing but the URL parser.
  *
  * Node's WHATWG `URL` applies IDNA automatically, so a hostname containing a
@@ -401,6 +443,14 @@ export function triage(email: ParsedEmail): Triage {
 
   checkBrand(from.domain, "From address", add);
 
+  // Reply-To and Return-Path too, which is not an afterthought: corpus message
+  // sample-7261.eml name-drops "facebookk.com" (one edit from facebook) in its
+  // Reply-To and nowhere else, so checking only From and links missed the one
+  // real typosquat in 8,614 messages. The address a reply actually goes to is
+  // at least as interesting as the one it claims to come from.
+  checkBrand(replyTo.domain, "Reply-To address", add);
+  checkBrand(returnPath.domain, "Return-Path", add);
+
   // --- Links ----------------------------------------------------------------
 
   const seenHosts = new Set<string>();
@@ -571,7 +621,16 @@ function checkBrand(
   const hits: { id: string; severity: Severity; detail: string }[] = [];
 
   for (const brand of BRANDS) {
-    if (subdomain.includes(brand) && regLabel !== brand) {
+    // The registrable label IS the brand: amazon.de, santander.com.br,
+    // netflix.co.uk. That is the brand on a country TLD, not an impersonation,
+    // and BRAND_OWNED_SUFFIXES cannot list every ccTLD every brand owns. The
+    // distance check excluded these implicitly via `dist > 0`; the skeleton
+    // check needs it said out loud, or every brand's own ccTLD is a lookalike
+    // of itself. (Measured: without this, 14 corpus messages were flagged HIGH
+    // for using santander.com.br, amazon.de, paypal.de and google.de.)
+    if (regLabel === brand) continue;
+
+    if (subdomain.includes(brand)) {
       hits.push({
         id: "brand_in_subdomain",
         severity: "high",
@@ -582,39 +641,63 @@ function checkBrand(
 
     // "paypa1.com" — one character off.
     //
-    // This used to allow an edit distance of 2, and that was measured wrong:
-    // 17 of 25 hits across 8,614 real messages were ordinary companies, because
-    // distance 2 on a short brand covers an enormous space of real words —
-    // shopify/spotify, ripple/apple, coingate/coinbase, money.com/monzo. All
-    // were reported as HIGH.
+    // Two tests, because they fail in different ways and deserve different
+    // confidence.
     //
-    // So: distance 1, and the lengths must be within one. The known cost is that
-    // we now miss the "rn" -> "m" trick (rnicrosoft.com is distance 2 from
-    // microsoft), and that is a deliberate trade rather than an oversight — at
-    // distance 2 this check was wrong more often than right. Catching rn/m
-    // properly wants a confusable-character map, not a bigger budget, and that
-    // is a good exercise.
-    // Edit distance is only informative when the brand is long enough that its
-    // one-edit neighbourhood is sparse. Measured on the corpus at distance 1:
-    // every single remaining hit was a real, unrelated domain, and all of them
-    // were short brands — mega.nz/meta, info.mrc.org/hmrc, hsb.com/hsbc,
-    // did.li/dpd, steamo.de/steam. A four-letter brand is one edit from an
-    // enormous number of legitimate four-letter domains, so the check cannot
-    // say anything useful about it. Six characters is where it starts to mean
-    // something, and it still catches the cases worth catching: paypa1/paypal
-    // and micros0ft/microsoft.
-    const budget = 1;
-    if (brand.length < 6) continue;
+    // 1. CONFUSABLE SKELETON. Fold the characters an attacker substitutes for
+    //    visual similarity onto one representative, then compare for equality.
+    //    A deliberate lookalike collapses exactly onto the brand: paypa1 and
+    //    micros0ft and rnicrosoft and vvhatsapp all do. Measured across 8,614
+    //    real messages this fires on nothing, so it is pure recall at no cost
+    //    in noise — the useful kind of check.
+    //
+    // 2. EDIT DISTANCE, deliberately loose. This one does produce false
+    //    positives and that is the accepted trade: a detector that never fires
+    //    teaches nothing and catches nothing. An earlier version required
+    //    brands of 6+ characters at distance 1 and fired on exactly ONE message
+    //    in the whole corpus. Better to be occasionally wrong and visibly
+    //    useful.
+    //
+    //    Severity carries the confidence, so a loose match does not shout as
+    //    loudly as an exact skeleton collision:
+    //      - skeleton match, or distance 1 on a brand of 6+ -> high
+    //      - anything looser (short brand, or distance 2)    -> medium
+    //
+    //    Known false positives, all medium, all worth looking at as a lesson in
+    //    what this class of check cannot do: mega.nz~meta, hsb.com~hsbc,
+    //    info.mrc.org~hmrc, did.li~dpd, coingate.com~coinbase, team.com~steam.
+    //    A four-letter brand sits one edit from a large number of perfectly
+    //    ordinary domains. Fixing that properly needs a popularity or
+    //    registration-age signal, not a tighter threshold — a good exercise.
+    if (confusableSkeleton(regLabel) === confusableSkeleton(brand)) {
+      hits.push({
+        id: "lookalike_domain",
+        severity: "high",
+        detail: `${where} host ${hostname} is not "${brand}" but is built to look like it: the two are identical once characters chosen for visual similarity (0/o, 1/l, rn/m) are folded together.`,
+      });
+      continue;
+    }
+
+    // Longer brands get a bigger budget: their edit neighbourhood is sparser,
+    // so distance 2 still means something for "microsoft" while it is noise for
+    // "dpd".
+    const budget = brand.length >= 8 ? 2 : 1;
     const dist = editDistance(regLabel, brand, budget);
     if (
       dist > 0 &&
       dist <= budget &&
-      Math.abs(regLabel.length - brand.length) <= 1
+      Math.abs(regLabel.length - brand.length) <= budget
     ) {
+      const confident = dist === 1 && brand.length >= 6;
       hits.push({
         id: "lookalike_domain",
-        severity: "high",
-        detail: `${where} host ${hostname} is ${dist} character away from "${brand}", which is a brand this kind of message often impersonates.`,
+        severity: confident ? "high" : "medium",
+        detail:
+          `${where} host ${hostname} is ${dist} character${dist === 1 ? "" : "s"} away from ` +
+          `"${brand}", which is a brand this kind of message often impersonates.` +
+          (confident
+            ? ""
+            : ` Short brands and 2-character differences both produce false positives, so treat this as a prompt to look, not a verdict.`),
       });
       continue;
     }
