@@ -115,26 +115,32 @@ this: `/phish` inside pi does the same job.
 
 ### 3. A model — pick one
 
-Two are configured and both work. **Either is fine**; pick on download size and
-what your laptop can spare.
+Two are configured and both work correctly. The real trade-off is download size
+against speed.
 
 | | **Bonsai 8B** | **Granite 4.1 3B** |
 |---|---|---|
-| Download | **1.5 GB** | 3.1 GB |
+| Download | **1.41 GiB** | 2.93 GiB |
 | Quantisation | Q1_0 — one bit per weight, extremely aggressive | Q6_K — near-lossless |
 | Parameters | 8 billion | 3.4 billion |
+| Prompt speed, CPU-only laptop | 5.8 tok/s | **30 tok/s** |
+| RAM at the 16k window we use | **~2.6 GiB** | ~3.5 GiB |
 | Native context | 65,536 | **131,072** |
 | Verdict accuracy on our test set | 38/38 | 38/38 |
 | Model id for `--model` | `bonsai-8b` | `granite-3b` |
 
-Both scored identically on correctness, so this is genuinely a matter of taste.
-Bonsai is the smaller download and the default. Granite is the more comfortable
-model to push beyond the workshop — a far gentler quantisation and eight times
-the context — at twice the bytes. If you are on a metered connection or a
-1.5 GB-vs-3 GB decision matters, take Bonsai and lose nothing today.
+Both were correct on everything we tested, so this is not about accuracy. It is
+about speed: measured on a CPU-only machine with no GPU, **Granite processes
+prompts about five times faster**, which is the difference between an agent that
+feels usable and one that feels stuck. Counter-intuitive given it has fewer than
+half the parameters — Q1_0 saves disk and spends it on arithmetic.
 
-There is a fuller comparison, with the measurements behind it, in
-[docs/model-comparison.md](docs/model-comparison.md).
+**Take Granite if you can afford the 2.93 GiB download.** Take Bonsai if you
+cannot — metered connection, slow line, no time before Friday. It is the
+configured default, and you give up speed rather than correctness.
+
+Measurements — RAM at every window size, speed, and what happens at full
+context — are in [docs/model-comparison.md](docs/model-comparison.md).
 
 **Bonsai 8B** (the default):
 
