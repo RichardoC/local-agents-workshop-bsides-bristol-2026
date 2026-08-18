@@ -63,6 +63,28 @@ test("strips quotes the model left in the value", () => {
   assert.deepEqual(repairPathArgs({ path: `"${P}"` }).args, { path: P });
 });
 
+test("strips a quote pair embedded around just the filename segment", () => {
+  // Found via real-model testing: a model asked to "wrap the path in quotes"
+  // echoed the user's quoting of the filename only, not the whole path — the
+  // original outer-anchored strip fixed the trailing quote but missed the
+  // leading one, since it was not at the very start of the string.
+  const embedded = `samples/synthetic/'02-reply-to-mismatch.eml'`;
+  const r = repairPathArgs({ path: embedded });
+  assert.deepEqual(r.args, { path: "samples/synthetic/02-reply-to-mismatch.eml" });
+  assert.ok(r.repairs.some((s) => s.includes("quotes")));
+});
+
+test("leaves three or more of the same quote character alone", () => {
+  // Ambiguous which pair was meant — do not guess.
+  const input = { path: `it's a 'test'.eml` };
+  assert.deepEqual(repairPathArgs(input).args, input);
+});
+
+test("leaves a lone quote character alone", () => {
+  const input = { path: `report's-summary.eml` };
+  assert.deepEqual(repairPathArgs(input).args, input);
+});
+
 test("drops extra keys but keeps the path", () => {
   const r = repairPathArgs({ path: P, verbose: true, reason: "checking" });
   assert.deepEqual(r.args, { path: P });

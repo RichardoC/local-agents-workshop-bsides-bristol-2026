@@ -34,7 +34,7 @@ import { triage, type Triage } from "./lib/signals.ts";
  * path. Rather than burn a slow round-trip on a retry, resolve the obvious
  * candidates ourselves and say which one we used.
  */
-const FALLBACK_DIRS = ["samples/phishing_pot/email", "samples", "."];
+const FALLBACK_DIRS = ["samples/synthetic", "samples/phishing_pot/email", "samples", "."];
 
 function resolveEmlPath(input: string): string | undefined {
   if (existsSync(input) && statSync(input).isFile()) return input;

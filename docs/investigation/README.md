@@ -63,9 +63,14 @@ overturned parts of findings 2, 3 and 5. Full write-up in
 - **Compaction is not manual-only by design.** `compaction.enabled` defaults to
   `true`; it is inert here because `reserveTokens` (16384) and
   `keepRecentTokens` (20000) both exceed the 16384-token window. The observed
-  behaviour was right; the stated cause was not. Note that with those values
-  sized down it still did not fire in testing at depth 10,995 — so the *effect*
-  in finding 5 stands, and the mechanism remains open.
+  behaviour was right; the stated cause was not. Sizing both below the window
+  (`.pi/agent/settings.json`) was later confirmed to make compaction fire —
+  see [small-model-tuning.md §4](../small-model-tuning.md#4-verified-against-a-real-gpu-backed-endpoint).
+  That confirmation needed a much faster endpoint than this machine, since the
+  first attempt at reduced values still hadn't fired within the time available
+  on this hardware — not because it doesn't work, but because a compaction call
+  is itself an LLM request that was too slow to complete here in a reasonable
+  test window.
 
 Method note, since it cost time twice: pi's own `pi/docs/` directory ships inside
 the static build. Read it before concluding that something is not configurable.

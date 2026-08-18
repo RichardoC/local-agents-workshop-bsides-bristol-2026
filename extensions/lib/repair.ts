@@ -67,6 +67,30 @@ function unwrapJsonString(value: unknown): { value: unknown; unwrapped: boolean 
 }
 
 /**
+ * Strip a pair of matching quote characters that unambiguously bracket
+ * something in the value.
+ *
+ * A quote character occurring exactly twice is safe to remove whether it
+ * wraps the whole string (`"path/to/x.eml"`) or just the last segment
+ * (`path/to/'x.eml'` — which happens when a model echoes quoting the user
+ * applied to a filename but not the whole path, e.g. "the file 'x.eml'").
+ * Zero or one occurrence is left alone (nothing to pair), and three or more
+ * is left alone too: at that point which pair was meant is not obvious, and
+ * guessing risks mangling a filename that genuinely contains that character.
+ *
+ * Found via real-model testing: anchoring the strip to the start/end of the
+ * whole string (the original version of this function) missed a model that
+ * echoed the user's own quoting of just the filename, embedded mid-path.
+ */
+function stripMatchedQuotePairs(value: string): string {
+  let out = value;
+  for (const q of ['"', "'", "`"]) {
+    if (out.split(q).length - 1 === 2) out = out.split(q).join("");
+  }
+  return out;
+}
+
+/**
  * Parse JSON that is *nearly* valid.
  *
  * Handles the two malformations small models produce most: a trailing comma,
@@ -198,8 +222,9 @@ export function repairPathArgs(input: unknown): RepairResult {
 
   if (typeof value !== "string") return { args: input, repairs: [] };
 
-  const cleaned = value.trim().replace(/^["'`]|["'`]$/g, "");
-  if (cleaned !== value) repairs.push("stripped surrounding quotes from the path");
+  const trimmed = value.trim();
+  const cleaned = stripMatchedQuotePairs(trimmed);
+  if (cleaned !== trimmed) repairs.push("stripped surrounding quotes from the path");
 
   if (found.key !== "path") {
     repairs.push(`renamed "${found.key}" to "path"`);

@@ -140,6 +140,7 @@ validation and before `execute()`**. **[documented]**
 | `{"arguments": {"path": …}}` | nested wrapper unwrapped |
 | `{"path": 42}` | stringified |
 | `{"path": "\"x.eml\""}` | surrounding quotes stripped |
+| `{"path": "dir/'x.eml'"}` (quotes around only the filename) | matching pair stripped wherever it sits, not just at the string's outer edges |
 | `{"path": "x", "verbose": true}` | extra keys dropped |
 | `{"path": "x.eml",}` | trailing comma (`parseLooseJson`) |
 | `{"path": "x.eml"` | truncated mid-object or mid-string |
@@ -153,7 +154,7 @@ error. `{"first": "a.eml", "second": "b.eml"}` is ambiguous and left alone;
 prose is not treated as a path; an empty path is not accepted. A repair layer
 that accepts anything hides genuine model failures and invents calls nobody
 made. Roughly a third of `extensions/lib/repair.test.ts` is negative cases for
-that reason. **[verified — 30 tests, `npm test`]**
+that reason. **[verified — 33 tests, `npm test`]**
 
 ### Also worth having
 
@@ -203,12 +204,74 @@ entire 16,384-token window, which makes auto-compaction inert: the trigger is
 search wants 20,000 recent tokens it can never find. Sizing both below the window
 is what makes automatic compaction possible at all.
 
-Be aware of the honest caveat: **auto-compaction did not fire in our testing**,
-at depth 10,995 with defaults, nor with `reserveTokens: 6144` within the time
-allowed. **[verified — that it did not fire; not verified why]** Compaction
-itself needs a summarisation call from the same slow model, so on this hardware
-it is expensive when it does run. `/compact` on demand remains the reliable
-option, and starting a fresh session between unrelated jobs is cheaper than both.
+**Resolved — compaction does fire with these values.** Earlier testing on the
+slow local machine could not confirm this within the time available: at depth
+10,995 with defaults, and with `reserveTokens: 6144` alone, no compaction entry
+appeared before the run was cut off. Retested against a GPU-backed endpoint
+running the same Bonsai-8B-Q1_0 model (~100x the local prompt-processing speed,
+so a compaction call that would take minutes locally completes in seconds): a
+synthetic session at depth 10,972 tokens, run with the settings above, produced
+exactly one `compaction` entry with `tokensBefore: 10972` — the trigger firing
+at precisely the depth engineered — and a well-formed structured summary.
+**[verified]** The full turn, including the compaction call itself, took 11–15
+seconds on that hardware. Locally, expect compaction to add a multi-minute
+summarisation call on top of whatever the triggering turn already costs — real,
+but no longer a mystery. `/compact` on demand remains the lower-latency choice
+when you would rather control exactly when that cost is paid.
+
+---
+
+## 4. Verified against a real GPU-backed endpoint
+
+Everything above up to the compaction result was developed against a CPU-only
+local llamafile at 5.74 tok/s, which makes iteration slow and some questions
+(does compaction fire? does the repair layer ever actually engage against a
+real model, not a mock?) expensive to answer properly. Re-running the same
+extension against the same Bonsai-8B-Q1_0 model on a GPU-backed OpenAI-compatible
+endpoint (~100x the local prompt-processing speed) made a full verification pass
+practical. Method: a second provider entry in a scratch `models.json` outside
+this repo, with `apiKey` set to `"$SOME_ENV_VAR"` — pi's own environment
+interpolation syntax — so no endpoint URL or token needed to touch a committed
+file. If you have your own fast endpoint for this model, the same pattern works:
+add a provider block per pi's [model configuration docs](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/models.md) (shipped as `docs/models.md` inside the static build too) with your `baseUrl`
+and an env-var `apiKey`, keeping the specifics out of version control.
+
+**Correctness: 12/12.** Every one of `samples/synthetic/*.eml` got the verdict
+its filename promises, with the right signal named, no fabricated header values,
+appropriate hedging on the low-severity case (`05-no-auth-headers`), and no
+false alarm on the clean control (`01-clean-newsletter`) or on a message whose
+link is bad despite passing SPF/DKIM/DMARC (`08-homoglyph-punycode` — the model
+correctly did not let a passing auth check override a live phishing link).
+**[verified]**
+
+**Two real bugs, found because a fast endpoint made it practical to actually try
+things instead of reasoning about them:**
+
+- `FALLBACK_DIRS` in `phish-triage.ts` was never updated when
+  `samples/synthetic/` was added — asking about a bare filename from that
+  directory failed to resolve. One-line fix.
+- The quote-stripping repair only anchored at the very start/end of the whole
+  string. A real prompt ("wrap the path in quotes when you call the tool") got
+  the model to echo quotes around just the filename segment
+  (`samples/synthetic/'02-...eml'`), which the old regex partially missed —
+  it stripped the trailing quote but not the embedded leading one, leaving a
+  path that could not resolve. Generalised to strip any quote character that
+  occurs exactly twice anywhere in the string, which covers both the
+  fully-wrapped and embedded case without guessing when three or more make the
+  intent ambiguous. Both bugs have regression tests now. **[verified]**
+
+**The repair layer does engage on real near-misses, and — just as importantly —
+stays out of the way otherwise.** Instrumented logging across a batch of
+naturally-phrased and mildly adversarial prompts showed: well-formed calls and
+calls where the user's prose used the wrong field name (`file=...`) both passed
+through with zero repairs, because Bonsai-8B is schema-driven — it read the
+tool's declared parameter name and used `path` regardless of how the prompt
+phrased it. Repairs engaged specifically when the model reproduced quoting
+found in the prompt. **[verified]** This is a genuinely useful negative result:
+a model this size did not need the alias-renaming or JSON-string-unwrapping
+rules to fire in ordinary use, but the conservative design means they cost
+nothing when unused and are ready for a different model or a longer session
+where they might.
 
 ---
 
