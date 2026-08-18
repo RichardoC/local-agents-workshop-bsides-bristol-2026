@@ -16,6 +16,10 @@ an open source licence so other people can install it.
 The conference wifi will not survive forty people downloading gigabytes at once.
 Everything below is a one-off download. **Do it before Friday.**
 
+> **In a hurry?** [**BEFORE-YOU-ARRIVE.md**](BEFORE-YOU-ARRIVE.md) is the
+> two-minute version: download a model, and if you have time, get pi. That is
+> genuinely all you have to do. The rest of this page is the detail behind it.
+
 ### 1. This repository
 
 ```bash
@@ -472,15 +476,39 @@ set this for you.
 
 ### Sampling
 
-pi sends no sampling parameters unless you set them, in which case the server's
-defaults apply. They are pinned in `.pi/agent/models.json`:
+Sampling is pinned per model in `.pi/agent/models.json`, with a note next to each
+value saying where it came from. pi merges `samplingParams` verbatim into every
+request, so what is written there is what the server gets.
+
+The two models are configured differently, on purpose, because their vendors say
+different things:
 
 ```json
-"samplingParams": { "temperature": 0.2, "top_p": 0.9, "top_k": 40, "repeat_penalty": 1.05 }
+"granite-3b": { "temperature": 0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "repeat_penalty": 1.0 }
+"bonsai-8b":  { "temperature": 0.2, "top_p": 0.9, "top_k": 20, "min_p": 0.0, "repeat_penalty": 1.0 }
 ```
 
-Low temperature because we want the model reporting findings, not improvising
-around them.
+Granite is **greedy**, because that is IBM's declared default — its
+`generation_config.json` sets no sampling fields at all and every official
+example calls `generate()` with no sampling arguments, which in transformers
+means `do_sample=False`. Bonsai follows its model card, which does publish a
+table (top-k 20, top-p 0.9, repetition penalty 1.0), except for temperature: the
+card suggests 0.5 and we use 0.2, because the job is reporting what a tool found
+rather than writing prose. An A/B at 0.6 across 25 real messages produced no
+improvement and some new garbles.
+
+**`min_p` is the one to notice.** Neither card mentions it, and it is tempting to
+conclude it is therefore off. It is not: llama.cpp defaults `min_p` to `0.05`,
+
+```c
+float   min_p              = 0.05f;  // 0.0 = disabled   — common/common.h
+```
+
+so a config that sets `temperature` and `top_p` but says nothing about `min_p`
+leaves a truncation sampler running that nobody chose. Setting it to `0` is what
+actually makes greedy greedy. The general lesson is worth more than the specific
+value: **an unspecified sampler is not a disabled one**, and the only way to know
+is to read the server's defaults.
 
 `repeat_penalty` is worth a note, because raising it is the obvious guess when an
 agent starts looping and it is the wrong lever. We tested 1.05, 1.15 and 1.30
@@ -494,11 +522,15 @@ sampler alone.
 
 ### On speed
 
-The workshop machines will be faster than the one this was built on. The figures
-above come from a 4-core cloud VM with no GPU managing about 3.7 tokens/second of
-prompt processing; a laptop with Metal or a modern GPU is typically one to two
-orders of magnitude quicker. If a first response takes a while, that is prompt
-processing, not a hang — watch the server terminal and you will see it counting.
+The workshop machines will be faster than the one this was built on: a 4-core
+cloud VM with no GPU at all, where Granite processed prompts at about 30
+tokens/second and Bonsai at about 5.8. A laptop with Metal or a modern GPU is
+typically far quicker. For scale, a full triage of one message end-to-end —
+launcher, tool call, model explanation — took **42 seconds** on that VM with
+Granite.
+
+If a first response takes a while, that is prompt processing, not a hang — watch
+the server terminal and you will see it counting.
 
 ---
 
@@ -572,10 +604,26 @@ human can act on.
 
 Sender/Reply-To/Return-Path divergence, display names containing a different
 address, recorded SPF/DKIM/DMARC verdicts, brand names appearing outside the
-brand's own domain, lookalike domains by edit distance, non-ASCII homoglyph
+brand's own domain, lookalike domains by edit distance and by confusable-character
+skeleton, non-ASCII homoglyph
 domains, link text disagreeing with the link target, executable and
 double-extension attachments, right-to-left override characters in filenames,
 and attachments whose leading bytes contradict their declared type.
+
+`lookalike_domain` is the one to argue about, and the argument is the lesson.
+Tuned for precision it fired on **one** message in 8,614 — technically accurate
+and useless. It now runs two tests: a *confusable skeleton*, which folds the
+characters attackers substitute for visual similarity (`0`/`o`, `1`/`l`, `rn`/`m`)
+onto one representative and compares for equality, and a deliberately loose
+*edit distance*. The skeleton catches `rnicrosoft` → `microsoft`, which is two
+edits and therefore invisible to any distance threshold a real corpus tolerates.
+
+The distance half does produce false positives — `mega.nz` against "meta",
+`hsb.com` against "hsbc", `coingate.com` against "coinbase". They are reported at
+`medium`, never `high`, because **severity is where the confidence lives**. A
+detector tuned until it never fires catches nothing; one that shouts about
+everything gets ignored. Six real false positives you can explain are a better
+teacher than silence, and improving them is one of the exercises.
 
 The homoglyph check is the neatest of them. Node's URL parser applies IDNA
 automatically, so this is the whole detection:

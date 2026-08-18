@@ -39,7 +39,12 @@
             "Top-k 20, range 20-40; Top-p 0.9, range 0.85-0.95; Repetition penalty",
             "1.0), EXCEPT temperature, which we set to 0.2 deliberately: the task is",
             "reporting findings from a tool, not writing prose, and an A/B at 0.6 on",
-            "25 real messages showed no improvement and introduced new garbles."
+            "25 real messages showed no improvement and introduced new garbles.",
+            "",
+            "min_p is stated explicitly as 0. The card does not mention it, and",
+            "leaving it out does NOT mean it is off: llama.cpp defaults min_p to",
+            "0.05 (common/common.h), so the card's configuration is only actually",
+            "in effect once this is said out loud."
           ],
           "reasoning": false,
           "input": ["text"],
@@ -49,6 +54,7 @@
             "temperature": 0.2,
             "top_p": 0.9,
             "top_k": 20,
+            "min_p": 0.0,
             "repeat_penalty": 1.0
           },
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
@@ -61,28 +67,45 @@
           "_nativeContext": 131072,
           "_note": [
             "IBM's card documents 131072 context, Apache 2.0, and explicitly lists",
-            "tool calling among the model's capabilities. It gives NO sampling",
-            "recommendation, so the values below are our choice for this task rather",
-            "than a vendor default, and are kept identical to Bonsai's so the two",
-            "models can be compared fairly.",
+            "tool calling among the model's capabilities.",
+            "",
+            "SAMPLING: IBM publishes no prose recommendation, but their declared",
+            "default is GREEDY, and that is what we use. Evidence:",
+            "generation_config.json for ibm-granite/granite-4.1-3b contains only",
+            "bos/eos/pad token ids and transformers_version -- no do_sample, no",
+            "temperature, no top_p, no top_k -- and every official example calls",
+            "generate() with no sampling arguments, which in transformers means",
+            "do_sample=False. Unsloth's Granite 4.1 page independently lists",
+            "temperature 0.0, top_k 0, top_p 1.0.",
+            "",
+            "Greedy is also right for this task: the model reports facts a tool has",
+            "already computed, so sampling buys nothing, and it makes the workshop",
+            "reproducible -- everyone gets the same output from the same message.",
+            "",
+            "min_p is stated explicitly because llama.cpp defaults it to 0.05",
+            "(common/common.h: `float min_p = 0.05f;`), an active truncation",
+            "sampler. Setting temperature and top_p while leaving min_p unstated",
+            "leaves a sampler running that nobody chose.",
             "",
             "The Unsloth GGUF card says to pass --jinja to llama.cpp. llamafile",
             "0.10.5 enables it by default (`--jinja, --no-jinja ... default:",
             "enabled`), so nothing extra is needed here; on an older llama.cpp build",
             "you would have to add it or tool calling may not work.",
             "",
-            "Measured 78.1 KiB of KV cache per token, so a full 131072 window needs",
-            "~10 GiB. 16384 is the workshop setting; raise -c and contextWindow",
-            "together if you raise it at all."
+            "KV cache is 80 KiB per token (40 layers x 8 KV heads x 64 head_dim x",
+            "2 bytes, doubled for K and V = 81920 bytes), so a full 131072 window",
+            "needs ~10 GiB. 16384 is the workshop setting; raise -c and",
+            "contextWindow together if you raise it at all."
           ],
           "reasoning": false,
           "input": ["text"],
           "contextWindow": 16384,
           "maxTokens": 8192,
           "samplingParams": {
-            "temperature": 0.2,
-            "top_p": 0.9,
-            "top_k": 20,
+            "temperature": 0,
+            "top_p": 1.0,
+            "top_k": 0,
+            "min_p": 0.0,
             "repeat_penalty": 1.0
           },
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
@@ -137,6 +160,7 @@
             "temperature": 0.2,
             "top_p": 0.9,
             "top_k": 20,
+            "min_p": 0.0,
             "repeat_penalty": 1.0
           },
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
@@ -150,9 +174,10 @@
           "contextWindow": 16384,
           "maxTokens": 8192,
           "samplingParams": {
-            "temperature": 0.2,
-            "top_p": 0.9,
-            "top_k": 20,
+            "temperature": 0,
+            "top_p": 1.0,
+            "top_k": 0,
+            "min_p": 0.0,
             "repeat_penalty": 1.0
           },
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }

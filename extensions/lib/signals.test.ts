@@ -24,7 +24,14 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 
 import { parseEmail, parseHeaders, decodeEncodedWords, parseAddress, parseAuthResults } from "./eml.ts";
-import { triage, registrableDomain, editDistance, extractHtmlLinks, extractTextLinks } from "./signals.ts";
+import {
+  triage,
+  registrableDomain,
+  editDistance,
+  confusableSkeleton,
+  extractHtmlLinks,
+  extractTextLinks,
+} from "./signals.ts";
 
 const CRLF = "\r\n";
 
@@ -34,6 +41,20 @@ function buildEml(headers: string[], body: string): Buffer {
 
 function signalIds(headers: string[], body: string): string[] {
   return triage(parseEmail(buildEml(headers, body))).signals.map((s) => s.id);
+}
+
+/** Signals as "id/severity", for tests where the severity IS the contract. */
+function signalPairs(headers: string[], body: string): string[] {
+  return triage(parseEmail(buildEml(headers, body))).signals.map((s) => `${s.id}/${s.severity}`);
+}
+
+/** The severity of one signal id on a From-domain-only message, or undefined. */
+function severityForDomain(domain: string, id: string): string | undefined {
+  return triage(
+    parseEmail(
+      buildEml([`From: X <a@${domain}>`, "Authentication-Results: mx; spf=pass; dkim=pass; dmarc=pass"], "hello"),
+    ),
+  ).signals.find((s) => s.id === id)?.severity;
 }
 
 // ---------------------------------------------------------------------------
@@ -274,29 +295,66 @@ test("brand_in_subdomain requires the brand to be in a SUBDOMAIN", () => {
   assert.ok(!ids.includes("brand_in_subdomain"), JSON.stringify(ids));
 });
 
-test("lookalike_domain does not fire on unrelated real companies", () => {
-  // shopify.com is 2 edits from "spotify", ripple.com 2 from "apple",
-  // coingate.com 2 from "coinbase", money.com 2 from "monzo". 17 of the 25
-  // corpus hits are of this kind.
-  for (const domain of ["shopify.com", "ripple.com", "coingate.com", "money.com", "teamz.com.au"]) {
-    const ids = signalIds([`From: X <a@${domain}>`, "Authentication-Results: mx; spf=pass; dkim=pass; dmarc=pass"], "hello");
-    assert.ok(!ids.includes("lookalike_domain"), `${domain} -> ${JSON.stringify(ids)}`);
+test("lookalike_domain fires on a deliberate lookalike, at high", () => {
+  // The point of the check. A digit swapped for the letter it resembles is not
+  // a coincidence, so this is the one case allowed to shout.
+  for (const domain of ["paypa1.com", "micros0ft.com", "rnicrosoft.com", "arnazon.com"]) {
+    assert.equal(severityForDomain(domain, "lookalike_domain"), "high", domain);
   }
-  // ...while a real one-character swap still fires.
-  assert.ok(
-    signalIds(["From: X <a@paypa1.com>", "Authentication-Results: mx; spf=pass; dkim=pass; dmarc=pass"], "hi").includes("lookalike_domain"),
+});
+
+test("lookalike_domain catches rn -> m, which edit distance cannot", () => {
+  // "rnicrosoft" is TWO edits from "microsoft", so no distance threshold a real
+  // corpus tolerates will ever see it. The confusable skeleton does, which is
+  // the entire reason that function exists rather than a bigger edit budget.
+  assert.equal(editDistance("rnicrosoft", "microsoft"), 2);
+  assert.equal(confusableSkeleton("rnicrosoft"), confusableSkeleton("microsoft"));
+});
+
+test("lookalike_domain reports uncertain matches as medium, not high", () => {
+  // These are real, unrelated companies that happen to sit one or two edits
+  // from a brand: mega.nz/meta, hsb.com/hsbc, coingate.com/coinbase,
+  // team.com/steam. They ARE false positives and the check fires on them
+  // deliberately — a detector tuned until it never fires teaches nothing and
+  // catches nothing. What must hold is that they never claim to be certain.
+  //
+  // The honest framing is that severity carries confidence: a short brand or a
+  // 2-character difference is a prompt to look, not a verdict.
+  for (const domain of ["mega.nz", "hsb.com", "coingate.com", "team.com", "steamo.de"]) {
+    const sev = severityForDomain(domain, "lookalike_domain");
+    assert.equal(sev, "medium", `${domain} should be medium, got ${sev}`);
+  }
+});
+
+test("lookalike_domain does not fire on a brand's own country domain", () => {
+  // amazon.de and santander.com.br are the brand itself on a ccTLD, and no
+  // list of owned suffixes can enumerate every ccTLD every brand registers.
+  // The edit-distance test excluded these implicitly (distance 0); the
+  // skeleton test had to be told, and until it was, 14 corpus messages were
+  // flagged HIGH for linking to the real Santander and Amazon.
+  for (const domain of ["amazon.de", "santander.com.br", "netflix.co.uk", "google.de"]) {
+    assert.equal(severityForDomain(domain, "lookalike_domain"), undefined, domain);
+  }
+});
+
+test("the brand check runs on Reply-To, not just From and links", () => {
+  // Corpus sample-7261.eml hides "facebookk.com" in Reply-To and nowhere else.
+  // While the check looked only at From and links, the single real typosquat in
+  // 8,614 messages went unreported.
+  const pairs = signalPairs(
+    ["From: Deals <news@unrelated-sender.example>", "Reply-To: x@vbwbweloig.facebookk.com"],
+    "hello",
   );
+  assert.ok(pairs.includes("lookalike_domain/high"), JSON.stringify(pairs));
 });
 
 test("checkBrand reports every brand signal for a host, not just the first", () => {
   // The loop used to `return` on the first match, so a host that both name-drops
   // one brand and typo-squats another only ever reported one of them.
   //
-  // This was written as microsoft-login.appl3.com, but "apple" is five
-  // characters and the lookalike check now ignores brands shorter than six —
-  // measured, because at four or five characters every corpus hit was an
-  // unrelated real domain. "paypa1" vs "paypal" exercises the same property
-  // with a brand long enough for edit distance to mean anything.
+  // Written with "paypa1" rather than a short brand so the lookalike half fires
+  // at high, which keeps the assertion about collecting BOTH signals rather
+  // than about how confident either one is.
   const ids = signalIds(["From: IT <admin@microsoft-login.paypa1.com>"], "hello");
   assert.ok(ids.includes("brand_in_subdomain"), JSON.stringify(ids));
   assert.ok(ids.includes("lookalike_domain"), JSON.stringify(ids));
