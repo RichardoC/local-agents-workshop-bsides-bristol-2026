@@ -109,13 +109,18 @@ Then the table that is the actual takeaway:
 | `lib/signals.ts` | Decide what is suspicious | No |
 | `phish-triage.ts` | Summarise and explain | Yes |
 
-69% of 8,614 real samples raise at least one signal with no model at all — 41%
-raise a high-severity one — at about 0.8 ms each. Say that number out loud; it
+62% of 8,614 real samples raise at least one signal with no model at all — 29%
+raise a high-severity one — at about 1.5 ms each. Say that number out loud; it
 reframes what the model is for.
 
-(Both figures were measured over the whole corpus in one process. Treat the 41%
-with care: a measured chunk of those high-severity hits are false positives —
-see docs/investigation for which checks and why.)
+Worth telling the room where those numbers came from, because it is the best
+story in the codebase. They were 69% and 41% until the checks were measured
+against the whole corpus: `brand_in_subdomain` was firing on 11.7% of all mail
+and **97% of its hits were the brand's own servers** — `storage.googleapis.com`
+alone accounted for 444 of them. A legitimate S3 invoice link was getting a
+high-severity phishing verdict, and the model then explained the fabricated
+reason in fluent prose. That is the failure this whole workshop argues against,
+found in our own code. It now fires on 0.2%.
 
 ## 14:30 — Break (10 min)
 

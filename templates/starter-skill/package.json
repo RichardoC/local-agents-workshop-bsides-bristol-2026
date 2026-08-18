@@ -1,0 +1,14 @@
+{
+  "name": "my-pi-skill",
+  "version": "0.1.0",
+  "description": "A pi skill. Say what yours does here.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "bsides-bristol-2026"
+  ],
+  "pi": {
+    "skills": ["./skills"]
+  }
+}

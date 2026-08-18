@@ -111,7 +111,11 @@ export function parseHeaders(headerBlock: string): Header[] {
 
   for (const line of lines) {
     if (/^[ \t]/.test(line) && unfolded.length > 0) {
-      unfolded[unfolded.length - 1] += " " + line.trim();
+      // RFC 5322 s.2.2.3: unfolding removes the CRLF and KEEPS the whitespace.
+      // Replacing the fold with a single space corrupts any value folded
+      // mid-token. A boundary parameter folded mid-string then matches nothing
+      // and the entire body is lost — silently, which is the worst kind.
+      unfolded[unfolded.length - 1] += line;
     } else if (line.length > 0) {
       unfolded.push(line);
     }
@@ -134,29 +138,65 @@ export function parseHeaders(headerBlock: string): Header[] {
  * Phishing leans on these heavily: an encoded display name hides a spoofed
  * brand from anything doing a naive string comparison on the raw header.
  */
+/** Decode the payload of a single encoded-word to raw bytes. */
+function encodedWordBytes(encoding: string, text: string): Buffer {
+  if (encoding.toUpperCase() === "B") return Buffer.from(text, "base64");
+  // Q-encoding: underscores are spaces, =XX is a hex byte.
+  const fixed = text
+    .replace(/_/g, " ")
+    .replace(/=([0-9A-Fa-f]{2})/g, (_m, hex: string) =>
+      String.fromCharCode(parseInt(hex, 16)),
+    );
+  return Buffer.from(fixed, "latin1");
+}
+
+const ENCODED_WORD = /=\?([^?]+)\?([BbQq])\?([^?]*)\?=/;
+// A run of encoded-words separated only by whitespace. Captured as one unit
+// because two rules only make sense across the whole run (see below).
+const ENCODED_WORD_RUN = new RegExp(
+  `${ENCODED_WORD.source}(?:[ \t]*${ENCODED_WORD.source})*`,
+  "g",
+);
+
 export function decodeEncodedWords(input: string): string {
-  return input.replace(
-    /=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g,
-    (match, charset: string, encoding: string, text: string) => {
+  return input.replace(ENCODED_WORD_RUN, (run) => {
+    // Two RFC 2047 rules apply to a *run*, not to each word:
+    //
+    //   s.6.2 — whitespace separating two encoded-words is not part of the
+    //           text, so it must be dropped rather than preserved.
+    //   an encoded-word is capped at 75 characters, so mailers routinely split
+    //           a long non-ASCII subject mid-character. Decoding each word
+    //           independently turns both halves of a UTF-8 sequence into
+    //           U+FFFD; concatenating the bytes of same-charset neighbours
+    //           first makes "café" come back as "café".
+    const words = [...run.matchAll(new RegExp(ENCODED_WORD.source, "g"))];
+    let out = "";
+    let pending: Buffer[] = [];
+    let pendingCharset = "";
+
+    const flush = () => {
+      if (!pending.length) return;
+      out += decodeBytes(Buffer.concat(pending), pendingCharset);
+      pending = [];
+    };
+
+    for (const w of words) {
+      const [, charset, encoding, text] = w as unknown as [string, string, string, string];
+      let bytes: Buffer;
       try {
-        let bytes: Buffer;
-        if (encoding.toUpperCase() === "B") {
-          bytes = Buffer.from(text, "base64");
-        } else {
-          // Q-encoding: underscores are spaces, =XX is a hex byte.
-          const fixed = text
-            .replace(/_/g, " ")
-            .replace(/=([0-9A-Fa-f]{2})/g, (_m, hex: string) =>
-              String.fromCharCode(parseInt(hex, 16)),
-            );
-          bytes = Buffer.from(fixed, "latin1");
-        }
-        return decodeBytes(bytes, charset);
+        bytes = encodedWordBytes(encoding, text);
       } catch {
-        return match; // Undecodable: leave it visible rather than lose it.
+        flush();
+        out += w[0]; // Undecodable: leave it visible rather than lose it.
+        continue;
       }
-    },
-  );
+      if (pending.length && charset.toLowerCase() !== pendingCharset.toLowerCase()) flush();
+      pendingCharset = charset;
+      pending.push(bytes);
+    }
+    flush();
+    return out;
+  });
 }
 
 /**
@@ -201,7 +241,14 @@ export function parseAddress(value: string | undefined): MailAddress {
   if (!value) return empty;
 
   const trimmed = value.trim();
-  const angle = trimmed.match(/^(.*?)<([^>]*)>/s);
+
+  // GREEDY on the prefix, and the addr-spec must be the last angle-bracketed
+  // group. A lazy prefix matches the FIRST "<...>", so a display name that
+  // itself contains an address — `"Bob <bob@bigbank.co.uk>" <attacker@evil>` —
+  // captures the reassuring inner one and reports it as the sender. That is a
+  // real spoofing technique, and it also stops
+  // display_name_is_different_address firing, which exists for exactly it.
+  const angle = trimmed.match(/^(.*)<([^<>]*)>[^<>]*$/s);
 
   let display = "";
   let address = "";
@@ -212,6 +259,11 @@ export function parseAddress(value: string | undefined): MailAddress {
   } else {
     address = trimmed.replace(/[(].*?[)]/g, "").trim();
   }
+
+  // Only ever one addr-spec. A header may legally carry several ("Reply-To:
+  // harvest@evil.ru, real@example.com"), and taking the last one made the
+  // domain depend on the order the attacker chose.
+  address = address.split(/,(?![^<]*>)/)[0].trim();
 
   const at = address.lastIndexOf("@");
   const domain = at === -1 ? "" : address.slice(at + 1).toLowerCase().trim();
@@ -238,9 +290,19 @@ export function parseAuthResults(headers: Header[]): AuthResults {
   const all = getAllHeaders(headers, "authentication-results").join("; ");
   if (!all) return { spf: "", dkim: "", dmarc: "", absent: true };
 
+  // Severity order, worst first. A message can carry several verdicts for one
+  // mechanism (two DKIM signatures, say); reporting the first match let a
+  // dkim=fail hide behind an earlier dkim=pass.
+  const WORST = ["fail", "softfail", "temperror", "permerror", "policy", "neutral", "none", "bestguesspass", "pass"];
+
   const pick = (key: string): string => {
-    const m = all.match(new RegExp(`\\b${key}=([a-z]+)`, "i"));
-    return m ? m[1].toLowerCase() : "";
+    // NOT \b: "-" is a word boundary, so \bspf= also matched "receiver-spf=",
+    // harvesting a different mechanism's verdict.
+    const re = new RegExp(`(?:^|[;\\s])${key}=([a-z]+)`, "gi");
+    const found = [...all.matchAll(re)].map((m) => m[1].toLowerCase());
+    if (!found.length) return "";
+    for (const v of WORST) if (found.includes(v)) return v;
+    return found[0];
   };
 
   return {
@@ -341,13 +403,25 @@ function walkParts(
   if (ct.type.startsWith("multipart/") && ct.params.boundary) {
     const boundary = ct.params.boundary;
     const s = body.toString("latin1");
-    const chunks = s.split(new RegExp(`--${escapeRegExp(boundary)}(?:--)?\\r?\\n?`));
+    // RFC 2046 s.5.1.1: the delimiter is CRLF + "--" + boundary at the START of
+    // a line. Matching it anywhere lets a body that merely *mentions* the
+    // boundary truncate itself — and the boundary is in the headers, so an
+    // attacker knows it and can hide body text from every text-based check.
+    const chunks = s.split(
+      new RegExp(
+        `(?:^|\\r?\\n)--${escapeRegExp(boundary)}[ \\t]*(?:--)?[ \\t]*(?=\\r?\\n|$)`,
+      ),
+    );
 
     const parts: MimePart[] = [];
     // The first chunk is the preamble before the first boundary; skip it.
     for (const chunk of chunks.slice(1)) {
       if (chunk.trim() === "") continue;
-      const sub = splitMessage(Buffer.from(chunk, "latin1"));
+      // The CRLF before the next delimiter belongs to the delimiter, not to
+      // this part. Keeping it made `bytes` two too many and the reported
+      // sha256 wrong — the hash an analyst pastes into a reputation service.
+      const trimmedChunk = chunk.replace(/\r?\n$/, "");
+      const sub = splitMessage(Buffer.from(trimmedChunk, "latin1"));
       const subHeaders = parseHeaders(sub.headerBlock);
       parts.push(...walkParts(sub.body, subHeaders, depth + 1));
     }
@@ -387,8 +461,13 @@ export function parseEmail(raw: Buffer): ParsedEmail {
   const attachments: Attachment[] = [];
 
   for (const part of parts) {
+    // A `name=` parameter is NOT proof of an attachment: it is legal on an
+    // inline text part, and treating it as proof made the body vanish from
+    // .text so every text-based check silently saw an empty message. Require
+    // an explicit attachment disposition, or a filename on a non-text part.
     const isAttachment =
-      part.disposition === "attachment" || part.filename !== "";
+      part.disposition === "attachment" ||
+      (part.filename !== "" && !part.contentType.toLowerCase().startsWith("text/"));
 
     if (isAttachment) {
       attachments.push({

@@ -525,8 +525,14 @@ never sees the raw email. That is what makes a small local model useful rather
 than merely present.
 
 Across all 8,614 real samples in the corpus, the deterministic checks alone raise
-at least one signal on **69%** of them, and a high-severity one on 41%, at about
-0.8 ms each. The model earns
+at least one signal on **62%** of them, and a high-severity one on 29%, at about
+1.5 ms each.
+
+Those numbers used to be higher — 69% and 41% — until the checks were measured
+against the corpus properly. `brand_in_subdomain` alone was firing on 11.7% of
+all mail, and 97% of those hits were the impersonated brand's *own* servers.
+Calibrating it down to 0.2% is the single biggest improvement in this repo, and
+the exercise that found it is in the run of show. The model earns
 its place on the other 23%, and on turning a list of signals into something a
 human can act on.
 

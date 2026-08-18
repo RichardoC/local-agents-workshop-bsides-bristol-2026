@@ -61,17 +61,89 @@ const BRANDS = [
   "adobe", "coinbase", "binance", "steam", "spotify",
 ];
 
+/**
+ * Hostnames the brands themselves own.
+ *
+ * Without this the brand check fires on the brand's own infrastructure: 890 of
+ * its 1,038 hits across 8,614 real messages were Google's CDN, Microsoft's
+ * tenant domain or Amazon's S3. A high-severity phishing verdict on a
+ * legitimate S3 invoice link is the most likely way this tool embarrasses
+ * someone in front of a room.
+ */
+const BRAND_OWNED_SUFFIXES = [
+  "google.com", "googleapis.com", "googleusercontent.com", "googleadservices.com",
+  "googlemail.com", "googletagmanager.com", "gstatic.com", "youtube.com", "goo.gl",
+  "microsoft.com", "microsoftonline.com", "onmicrosoft.com", "office.com",
+  "office365.com", "sharepoint.com", "live.com", "outlook.com", "azure.com",
+  "amazon.com", "amazon.co.uk", "amazonaws.com", "amazonses.com", "awstrack.me",
+  "media-amazon.com", "ssl-images-amazon.com",
+  "apple.com", "icloud.com", "itunes.com",
+  "paypal.com", "paypal.co.uk", "paypalobjects.com",
+  "dropbox.com", "dropboxusercontent.com", "docusign.com", "docusign.net",
+  "adobe.com", "adobelogin.com", "linkedin.com", "licdn.com",
+  "facebook.com", "instagram.com", "meta.com", "fbcdn.net", "whatsapp.com",
+  "netflix.com", "nflxext.com", "spotify.com", "scdn.co",
+  "coinbase.com", "binance.com", "steampowered.com", "steamcommunity.com",
+  "hmrc.gov.uk", "royalmail.com", "dhl.com", "fedex.com", "dpd.co.uk", "evri.com",
+  "barclays.co.uk", "hsbc.co.uk", "lloydsbank.co.uk", "natwest.com",
+  "santander.co.uk", "monzo.com",
+];
+
+/**
+ * Click-tracking domains used by legitimate mail providers.
+ *
+ * Every bulk mailer rewrites the href while leaving the brand's own URL as the
+ * anchor text — which is href/text mismatch by construction. This check fires on
+ * 494 of 8,614 real messages, and a large share are ordinary newsletters. These
+ * are still worth reporting, just not as high severity.
+ */
+const ESP_TRACKING_SUFFIXES = [
+  "list-manage.com", "mailchimp.com", "mcsv.net", "mandrillapp.com",
+  "sendgrid.net", "sendgrid.com", "sparkpostmail.com", "mailgun.org",
+  "createsend.com", "cmail19.com", "cmail20.com", "exacttarget.com",
+  "et.email", "click.email", "rs6.net", "constantcontact.com",
+  "hubspotlinks.com", "hs-sites.com", "salesforce.com", "pardot.com",
+  "klaviyomail.com", "sailthru.com", "braze.com", "iterable.com",
+  "customeriomail.com", "postmarkapp.com", "amazonses.com", "awstrack.me",
+  "doubleclick.net", "go.pardot.com", "mktoresp.com", "marketo.com",
+];
+
 /** Extensions that are executable, or are treated as such by Windows. */
 const DANGEROUS_EXTENSIONS = [
   "exe", "scr", "com", "pif", "bat", "cmd", "js", "jse", "vbs", "vbe",
   "wsf", "wsh", "hta", "lnk", "ps1", "msi", "jar", "reg", "iso", "img",
 ];
 
+/**
+ * Suffixes where anyone can register a name, so two sites under one of them are
+ * NOT the same organisation.
+ *
+ * These are the Public Suffix List's *private* section, and the omission was not
+ * academic: treating `github.io` as registrable makes alice.github.io and
+ * attacker.github.io look like one domain, so every mismatch check goes quiet on
+ * exactly the free hosting phishing likes. All of these appear as phishing hosts
+ * in the corpus.
+ */
+const PRIVATE_SUFFIXES = [
+  "github.io", "gitlab.io", "pages.dev", "workers.dev", "vercel.app",
+  "netlify.app", "web.app", "firebaseapp.com", "firebasestorage.googleapis.com",
+  "cloudfunctions.net", "run.app", "appspot.com", "blogspot.com",
+  "bubbleapps.io", "weebly.com", "wixsite.com", "squarespace.com",
+  "herokuapp.com", "onrender.com", "glitch.me", "repl.co", "surge.sh",
+  "s3.amazonaws.com", "onmicrosoft.com", "sharepoint.com", "myshopify.com",
+  "zendesk.com", "notion.site", "webflow.io", "duckdns.org", "ngrok.io",
+  "ngrok-free.app", "trycloudflare.com", "azurewebsites.net", "sites.google.com",
+];
+
 /** Multi-part public suffixes common enough to matter for a UK audience. */
 const MULTI_PART_SUFFIXES = [
   "co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "net.uk", "sch.uk",
-  "com.au", "net.au", "org.au", "co.nz", "co.za", "com.br", "co.jp",
-  "com.cn", "co.in", "com.mx", "com.sg",
+  // The ones a UK security audience will actually try.
+  "nhs.uk", "police.uk", "ltd.uk", "plc.uk", "mod.uk",
+  "com.au", "net.au", "org.au", "gov.au", "edu.au", "co.nz", "co.za",
+  "com.br", "co.jp", "or.jp", "ne.jp", "ac.jp", "com.cn", "co.in",
+  "com.mx", "com.sg", "co.il", "com.tr", "co.kr", "com.tw", "com.hk",
+  "co.id", "com.ua",
 ];
 
 /**
@@ -82,8 +154,24 @@ const MULTI_PART_SUFFIXES = [
  * workshop says so out loud rather than pretending otherwise.
  */
 export function registrableDomain(hostname: string): string {
-  const labels = hostname.toLowerCase().split(".").filter(Boolean);
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+
+  // An IP literal has no registrable domain; returning "2.1" for 192.0.2.1 was
+  // worse than useless, because it looks like an answer.
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")) return host;
+
+  const labels = host.split(".").filter(Boolean);
   if (labels.length <= 2) return labels.join(".");
+
+  // A private (shared-hosting) suffix takes one more label than the suffix
+  // itself, so alice.github.io stays distinct from attacker.github.io.
+  for (const suffix of PRIVATE_SUFFIXES) {
+    if (host === suffix) return host;
+    if (host.endsWith("." + suffix)) {
+      const depth = suffix.split(".").length + 1;
+      return labels.slice(-depth).join(".");
+    }
+  }
 
   const lastTwo = labels.slice(-2).join(".");
   const take = MULTI_PART_SUFFIXES.includes(lastTwo) ? 3 : 2;
@@ -91,8 +179,11 @@ export function registrableDomain(hostname: string): string {
 }
 
 /** Levenshtein distance, capped for early exit on obviously distant strings. */
-export function editDistance(a: string, b: string): number {
-  if (Math.abs(a.length - b.length) > 3) return 99;
+export function editDistance(a: string, b: string, cap = Infinity): number {
+  // Previously this returned the magic number 99 past a hard length delta of 3,
+  // which is a *distance* a caller can compare against by accident. Take the cap
+  // explicitly instead, and return a real distance otherwise.
+  if (Math.abs(a.length - b.length) > cap) return cap + 1;
 
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
@@ -130,10 +221,12 @@ export function isPunycoded(original: string, parsedHostname: string): boolean {
 /** Pull hrefs and their visible anchor text out of an HTML body. */
 export function extractHtmlLinks(html: string): LinkInfo[] {
   const links: LinkInfo[] = [];
-  const anchorRe = /<a\b[^>]*?href\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>(.*?)<\/a\s*>/gis;
+  // The closing tag is optional: real bulk mail leaves anchors unterminated, and
+  // requiring </a> made the link — and every check depending on it — vanish.
+  const anchorRe = /<a\b[^>]*?href\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>(.*?)(?:<\/a\s*>|$)/gis;
 
   for (const m of html.matchAll(anchorRe)) {
-    const href = (m[2] ?? m[3] ?? m[4] ?? "").trim();
+    const href = decodeHtmlEntities((m[2] ?? m[3] ?? m[4] ?? "").trim());
     const text = m[5].replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
     if (!href || href.startsWith("mailto:") || href.startsWith("#")) continue;
 
@@ -150,6 +243,24 @@ export function extractTextLinks(text: string): LinkInfo[] {
     hostname: safeHostname(m[0]),
     text: "",
   }));
+}
+
+/**
+ * Decode the HTML entities an href arrives wrapped in.
+ *
+ * Without this, 105 corpus messages produced a hostname like "xn--rzj&-9pa" —
+ * not a hostname at all, but undecoded entity soup that `new URL()` happily
+ * accepted. The signal fired, the reason was fiction, and the real host was
+ * never examined. The fiction is what reaches the model.
+ */
+export function decodeHtmlEntities(text: string): string {
+  const named: Record<string, string> = {
+    amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", "#39": "'",
+  };
+  return text
+    .replace(/&#x([0-9a-f]+);/gi, (_m, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_m, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&([a-z]+);/gi, (m, n) => named[n.toLowerCase()] ?? m);
 }
 
 function safeHostname(href: string): string {
@@ -180,9 +291,16 @@ function magicMismatch(magic: Buffer, declaredType: string): string | null {
   else if (hex.startsWith("7F454C46")) actual = "application/x-elf";
   else return null;
 
-  // A .docx/.xlsx is a zip, so treat OOXML types as compatible with zip.
   const declared = declaredType.toLowerCase();
-  if (actual === "application/zip" && declared.includes("openxmlformats")) {
+
+  // "application/octet-stream" means "I do not know what these bytes are". There
+  // is no claim to contradict. 22 of 24 corpus hits were a genuine PDF honestly
+  // sent by a mailer that set no specific type — a 92% false-positive rate on a
+  // HIGH signal.
+  if (declared === "application/octet-stream" || declared === "") return null;
+
+  // A .docx/.xlsx is a zip, so treat OOXML types as compatible with zip.
+  if (actual === "application/zip" && /openxmlformats|zip|jar|epub|od[tsp]/.test(declared)) {
     return null;
   }
   if (declared.includes(actual.split("/")[1])) return null;
@@ -198,8 +316,16 @@ function magicMismatch(magic: Buffer, declaredType: string): string | null {
 export function triage(email: ParsedEmail): Triage {
   const { headers } = email;
   const signals: Signal[] = [];
-  const add = (id: string, severity: Severity, detail: string) =>
+  // Dedupe on id + detail. Per-link checks repeat themselves on a message with
+  // many links, and the design premise is "about twenty facts" — nothing was
+  // enforcing that.
+  const seen = new Set<string>();
+  const add = (id: string, severity: Severity, detail: string) => {
+    const key = `${id}\u0000${detail}`;
+    if (seen.has(key)) return;
+    seen.add(key);
     signals.push({ id, severity, detail });
+  };
 
   const from = parseAddress(getHeader(headers, "from"));
   const replyTo = parseAddress(getHeader(headers, "reply-to"));
@@ -208,6 +334,13 @@ export function triage(email: ParsedEmail): Triage {
   const subject = getHeader(headers, "subject") ?? "";
   const date = getHeader(headers, "date") ?? "";
   const hops = headers.filter((h) => h.name === "received").length;
+
+  // Declared here rather than down in the Links section on purpose. Putting it
+  // there meant anyone adding a link-based check in the obvious place — under
+  // the "--- Links ---" banner but above the const — got
+  // "Cannot access 'links' before initialization", with no type error to warn
+  // them, because --experimental-strip-types strips types without checking them.
+  const links = [...extractHtmlLinks(email.html), ...extractTextLinks(email.text)];
 
   const fromReg = registrableDomain(from.domain);
 
@@ -270,7 +403,6 @@ export function triage(email: ParsedEmail): Triage {
 
   // --- Links ----------------------------------------------------------------
 
-  const links = [...extractHtmlLinks(email.html), ...extractTextLinks(email.text)];
   const seenHosts = new Set<string>();
 
   for (const link of links) {
@@ -291,18 +423,32 @@ export function triage(email: ParsedEmail): Triage {
   // Anchor text that names a different domain than the href actually goes to.
   for (const link of links) {
     if (!link.text || !link.hostname) continue;
-    const claimed = link.text.match(/\b(?:https?:\/\/)?((?:[\w-]+\.)+[a-z]{2,})\b/i);
+
+    // Require the anchor text to *be* a bare URL or hostname, not prose that
+    // merely mentions a domain ("read our policy at example.org" was firing).
+    const textOnly = link.text.trim();
+    const claimed = textOnly.match(
+      /^(?:https?:\/\/)?((?:[\w-]+\.)+[a-z]{2,})(?:[/?#].*)?$/i,
+    );
     if (!claimed) continue;
 
     const claimedReg = registrableDomain(claimed[1]);
     const actualReg = registrableDomain(link.hostname);
-    if (claimedReg && actualReg && claimedReg !== actualReg) {
-      add(
-        "href_text_mismatch",
-        "high",
-        `Link text says "${claimed[1]}" but it points to ${link.hostname}.`,
-      );
-    }
+    if (!claimedReg || !actualReg || claimedReg === actualReg) continue;
+
+    // A mail provider's click tracker rewrites the href and leaves the brand's
+    // URL as the text. That is the same shape as the attack, so report it — but
+    // say which one it looks like rather than crying wolf.
+    const isEsp = ESP_TRACKING_SUFFIXES.some(
+      (d) => actualReg === d || link.hostname.endsWith("." + d),
+    );
+    add(
+      "href_text_mismatch",
+      isEsp ? "low" : "high",
+      isEsp
+        ? `Link text says "${claimed[1]}" but it points to ${link.hostname}, which is a known mail-provider click tracker. Legitimate bulk mail looks like this.`
+        : `Link text says "${claimed[1]}" but it points to ${link.hostname}.`,
+    );
   }
 
   if (isPunycoded(from.domain, safeHostname(`http://${from.domain}`))) {
@@ -327,7 +473,9 @@ export function triage(email: ParsedEmail): Triage {
     }
 
     // "invoice.pdf.exe" — the middle extension is there to be believed.
-    const parts = att.filename.trim().split(".");
+    // "holiday.png." splits to 3 parts with an empty last one, which looked
+    // like a double extension. extensionOf already strips these; match it.
+    const parts = att.filename.trim().replace(/[.\s]+$/, "").split(".");
     if (parts.length > 2) {
       const inner = parts[parts.length - 2].toLowerCase();
       if (["pdf", "doc", "docx", "xls", "xlsx", "jpg", "png", "txt"].includes(inner)) {
@@ -359,6 +507,22 @@ export function triage(email: ParsedEmail): Triage {
     }
   }
 
+  // --------------------------------------------------------------------------
+  // ADD YOUR OWN CHECK HERE.
+  //
+  // Everything you might need is already in scope: `subject`, `date`, `from`,
+  // `replyTo`, `returnPath`, `auth`, `hops`, `links`, `email.attachments`,
+  // `email.text`, `email.html`, and `headers` (with `getHeader` /
+  // `getAllHeaders`). Then call:
+  //
+  //   add("your_signal_id", "low" | "medium" | "high", "what you found");
+  //
+  // Put the specifics in the detail string — the model quotes it, so vague
+  // wording becomes a vague verdict. And check your signal against the corpus
+  // before trusting it: several checks in this file were miscalibrated for
+  // exactly as long as nobody measured them.
+  // --------------------------------------------------------------------------
+
   return {
     subject,
     from,
@@ -389,26 +553,65 @@ function checkBrand(
   const reg = registrableDomain(hostname);
   const regLabel = reg.split(".")[0];
 
+  // The brand's own hostnames are not the brand impersonating itself.
+  if (BRAND_OWNED_SUFFIXES.includes(reg)) return;
+
+  // Only the labels LEFT OF the registrable domain are a subdomain. The old
+  // check tested the whole hostname, so any registrable label that merely
+  // contained a brand as a substring fired — and the detail string then
+  // contradicted itself ("metamask.io contains meta but the registrable domain
+  // is metamask.io"). 121 of 1,038 corpus hits were that.
+  const subdomain = hostname.endsWith("." + reg)
+    ? hostname.slice(0, -(reg.length + 1))
+    : "";
+
+  // Collect rather than returning on the first match: a host that both
+  // name-drops one brand and typo-squats another was only ever reporting
+  // whichever brand happened to come first in the list.
+  const hits: { id: string; severity: Severity; detail: string }[] = [];
+
   for (const brand of BRANDS) {
-    // "paypal.com.secure-login.ru" — the brand is present but not registrable.
-    if (hostname.includes(brand) && regLabel !== brand) {
-      add(
-        "brand_in_subdomain",
-        "high",
-        `${where} host ${hostname} contains "${brand}" but the registrable domain is ${reg}.`,
-      );
-      return;
+    if (subdomain.includes(brand) && regLabel !== brand) {
+      hits.push({
+        id: "brand_in_subdomain",
+        severity: "high",
+        detail: `${where} host ${hostname} puts "${brand}" in a subdomain of ${reg}, which is not ${brand}'s own domain.`,
+      });
+      continue;
     }
 
-    // "paypa1.com", "rnicrosoft.com" — one or two characters off.
-    const dist = editDistance(regLabel, brand);
-    if (dist > 0 && dist <= 2 && regLabel.length >= 5) {
-      add(
-        "lookalike_domain",
-        "high",
-        `${where} host ${hostname} is ${dist} character(s) away from "${brand}".`,
-      );
-      return;
+    // "paypa1.com" — one character off.
+    //
+    // This used to allow an edit distance of 2, and that was measured wrong:
+    // 17 of 25 hits across 8,614 real messages were ordinary companies, because
+    // distance 2 on a short brand covers an enormous space of real words —
+    // shopify/spotify, ripple/apple, coingate/coinbase, money.com/monzo. All
+    // were reported as HIGH.
+    //
+    // So: distance 1, and the lengths must be within one. The known cost is that
+    // we now miss the "rn" -> "m" trick (rnicrosoft.com is distance 2 from
+    // microsoft), and that is a deliberate trade rather than an oversight — at
+    // distance 2 this check was wrong more often than right. Catching rn/m
+    // properly wants a confusable-character map, not a bigger budget, and that
+    // is a good exercise.
+    const budget = 1;
+    const dist = editDistance(regLabel, brand, budget);
+    if (
+      dist > 0 &&
+      dist <= budget &&
+      Math.abs(regLabel.length - brand.length) <= 1
+    ) {
+      hits.push({
+        id: "lookalike_domain",
+        // A fuzzy match is a lead, not a finding. Demoted from high, and the
+        // detail says so, so the model does not present a guess as a fact.
+        severity: "medium",
+        detail: `${where} host ${hostname} is ${dist} character away from "${brand}". This is a fuzzy match and may be coincidence.`,
+      });
+      continue;
     }
   }
+
+  // Cap so a pathological hostname cannot flood the object handed to the model.
+  for (const h of hits.slice(0, 3)) add(h.id, h.severity, h.detail);
 }

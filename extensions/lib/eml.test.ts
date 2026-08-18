@@ -22,7 +22,11 @@ test("unfolds folded headers", () => {
   const headers = parseHeaders(
     ["Subject: a very" + CRLF + "  long subject", "From: a@b.com"].join(CRLF),
   );
-  assert.equal(headers[0].value, "a very long subject");
+  // Two spaces, not one: RFC 5322 s.2.2.3 unfolding removes the CRLF and KEEPS
+  // the folding whitespace. Collapsing it to a single space reads more nicely
+  // but corrupts any value folded mid-token — a Content-Type boundary
+  // containing whitespace then matches nothing and the whole body is lost.
+  assert.equal(headers[0].value, "a very  long subject");
   assert.equal(headers.length, 2);
 });
 
