@@ -172,6 +172,38 @@ Two things about it are worth knowing before Friday:
   is asleep the first request also pulls the ~320 MB loader, so give it a minute.
 
 <details>
+<summary>If your machine is too slow to run a model at all</summary>
+
+There is a `hosted` provider in `.pi/agent/models.json` for exactly this. It
+ships as a **placeholder** — `baseUrl` says `REPLACE-ME` — and is invisible to pi
+until both the URL is filled in and a token is present, so it cannot get in your
+way if it is unused.
+
+If a hosted endpoint has been set up for the session:
+
+```bash
+export HF_TOKEN=hf_...
+WORKSHOP_PROVIDER=hosted WORKSHOP_MODEL=granite-3b-hosted ./pi-workshop.sh
+```
+
+```powershell
+$env:HF_TOKEN = "hf_..."
+$env:WORKSHOP_PROVIDER = "hosted"; $env:WORKSHOP_MODEL = "granite-3b-hosted"
+.\pi-workshop.ps1
+```
+
+No local server is needed on this path, and the launcher skips the health check.
+The token is read from the environment and never written to a file — do not paste
+it into `models.json`, which is committed.
+
+Everything else behaves identically, because the endpoint runs the same
+llama.cpp server the local llamafile does. Two things to expect: an endpoint
+scaled to zero returns HTTP 503 for a minute or two while it wakes, and the
+`contextWindow` in the config must match whatever the endpoint actually serves
+(`curl -s -H "Authorization: Bearer $HF_TOKEN" <host>/props | grep -o '"n_ctx":[0-9]*'`).
+</details>
+
+<details>
 <summary>Using a different model entirely</summary>
 
 Any GGUF on Hugging Face works — point the generator at
@@ -526,7 +558,7 @@ than merely present.
 
 Across all 8,614 real samples in the corpus, the deterministic checks alone raise
 at least one signal on **62%** of them, and a high-severity one on 29%, at about
-1.5 ms each.
+0.7 ms each.
 
 Those numbers used to be higher — 69% and 41% — until the checks were measured
 against the corpus properly. `brand_in_subdomain` alone was firing on 11.7% of

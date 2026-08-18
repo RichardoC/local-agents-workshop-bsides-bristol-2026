@@ -1,10 +1,24 @@
 {
+  "_about": [
+    "Model configuration for the workshop, committed so nobody has to edit their",
+    "home directory. Keys beginning with _ are notes: pi ignores unknown keys.",
+    "",
+    "Sampling values are cited. Where we deviate from a vendor recommendation the",
+    "reason is recorded, because an unexplained sampling value is impossible for",
+    "anyone else to reason about later."
+  ],
   "providers": {
     "local": {
       "name": "Local llamafile",
       "baseUrl": "http://127.0.0.1:8080/v1",
       "apiKey": "no-key-needed",
       "api": "openai-completions",
+      "_note": [
+        "apiKey is a placeholder: llamafile ignores it, but pi requires a model to",
+        "have auth before it appears in /model, so it must be non-empty.",
+        "compat: llamafile does not understand the `developer` role or",
+        "reasoning_effort, so both are turned off."
+      ],
       "compat": {
         "supportsDeveloperRole": false,
         "supportsReasoningEffort": false
@@ -13,28 +27,133 @@
         {
           "id": "bonsai-8b",
           "name": "Bonsai 8B Q1_0 (llamafile)",
+          "_model": "prism-ml/Bonsai-8B-gguf : Bonsai-8B-Q1_0.gguf, Apache 2.0",
+          "_nativeContext": 65536,
+          "_note": [
+            "contextWindow is 16384, well under the model's native 65536, and it MUST",
+            "equal the server's -c value or pi's reply allowance collapses and the",
+            "agent silently returns nothing. Measured: a 65536 window needs ~10 GiB",
+            "of RAM, since this model spends 144 KiB of KV cache per token.",
+            "",
+            "Sampling per the official model card (Temperature 0.5, range 0.5-0.7;",
+            "Top-k 20, range 20-40; Top-p 0.9, range 0.85-0.95; Repetition penalty",
+            "1.0), EXCEPT temperature, which we set to 0.2 deliberately: the task is",
+            "reporting findings from a tool, not writing prose, and an A/B at 0.6 on",
+            "25 real messages showed no improvement and introduced new garbles."
+          ],
+          "reasoning": false,
+          "input": ["text"],
           "contextWindow": 16384,
           "maxTokens": 8192,
-          "input": ["text"],
           "samplingParams": {
             "temperature": 0.2,
             "top_p": 0.9,
-            "top_k": 40,
-            "repeat_penalty": 1.05
+            "top_k": 20,
+            "repeat_penalty": 1.0
           },
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
         {
           "id": "granite-3b",
           "name": "Granite 4.1 3B Q6_K (llamafile)",
+          "_model": "unsloth/granite-4.1-3b-GGUF : granite-4.1-3b-Q6_K.gguf, Apache 2.0",
+          "_baseModel": "ibm-granite/granite-4.1-3b",
+          "_nativeContext": 131072,
+          "_note": [
+            "IBM's card documents 131072 context, Apache 2.0, and explicitly lists",
+            "tool calling among the model's capabilities. It gives NO sampling",
+            "recommendation, so the values below are our choice for this task rather",
+            "than a vendor default, and are kept identical to Bonsai's so the two",
+            "models can be compared fairly.",
+            "",
+            "The Unsloth GGUF card says to pass --jinja to llama.cpp. llamafile",
+            "0.10.5 enables it by default (`--jinja, --no-jinja ... default:",
+            "enabled`), so nothing extra is needed here; on an older llama.cpp build",
+            "you would have to add it or tool calling may not work.",
+            "",
+            "Measured 78.1 KiB of KV cache per token, so a full 131072 window needs",
+            "~10 GiB. 16384 is the workshop setting; raise -c and contextWindow",
+            "together if you raise it at all."
+          ],
+          "reasoning": false,
+          "input": ["text"],
           "contextWindow": 16384,
           "maxTokens": 8192,
-          "input": ["text"],
           "samplingParams": {
             "temperature": 0.2,
             "top_p": 0.9,
-            "top_k": 40,
-            "repeat_penalty": 1.05
+            "top_k": 20,
+            "repeat_penalty": 1.0
+          },
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    },
+
+    "hosted": {
+      "name": "Hosted endpoint (contingency)",
+      "_note": [
+        "PLACEHOLDER — not usable until baseUrl is filled in.",
+        "",
+        "A fallback for anyone whose machine is too slow to run the model locally.",
+        "Any OpenAI-compatible endpoint serving one of these GGUFs works; a Hugging",
+        "Face Inference Endpoint running llama.cpp is the obvious choice, since it",
+        "is the same server the local llamafile runs.",
+        "",
+        "To use it:",
+        "  1. Replace REPLACE-ME below with the endpoint host.",
+        "  2. export HF_TOKEN=hf_...    (the token is read from the environment and",
+        "     never stored in this file — do not paste it here, it would be",
+        "     committed.)",
+        "  3. WORKSHOP_PROVIDER=hosted WORKSHOP_MODEL=<id> ./pi-workshop.sh",
+        "",
+        "Check the endpoint before relying on it, because both matter:",
+        "  curl -s -H \"Authorization: Bearer $HF_TOKEN\" <host>/props \\",
+        "    | grep -o '\"n_ctx\":[0-9]*'                  # must match contextWindow",
+        "  ... | grep -o '\"supports_tools\":[a-z]*'       # must be true, or the",
+        "                                                 # extension's tool is",
+        "                                                 # never called",
+        "",
+        "A hosted endpoint scaled to zero returns HTTP 503 until it wakes, which",
+        "takes a minute or two. That is not a misconfiguration; retry."
+      ],
+      "baseUrl": "https://REPLACE-ME.endpoints.huggingface.cloud/v1",
+      "apiKey": "$HF_TOKEN",
+      "api": "openai-completions",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {
+          "id": "bonsai-8b-hosted",
+          "name": "Bonsai 8B Q1_0 (hosted)",
+          "_note": "Set contextWindow to the endpoint's own n_ctx, from /props.",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 16384,
+          "maxTokens": 8192,
+          "samplingParams": {
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "top_k": 20,
+            "repeat_penalty": 1.0
+          },
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "granite-3b-hosted",
+          "name": "Granite 4.1 3B Q6_K (hosted)",
+          "_note": "Set contextWindow to the endpoint's own n_ctx, from /props.",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 16384,
+          "maxTokens": 8192,
+          "samplingParams": {
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "top_k": 20,
+            "repeat_penalty": 1.0
           },
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }
