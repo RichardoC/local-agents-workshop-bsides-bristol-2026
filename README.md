@@ -784,12 +784,29 @@ worth understanding rather than copying:
 - **`retry.maxRetries: 1`** — the default is 3. When a request takes twenty
   minutes, three extra attempts is over an hour of identical failing work, and it
   looks exactly like an agent stuck in a loop.
-- **`compaction`** — the defaults (`reserveTokens` 16384, `keepRecentTokens`
-  20000) are both larger than this workshop's entire 16,384-token window, which
-  makes automatic compaction inert. Sized below the window it fires as intended.
-- **`httpIdleTimeoutMs`** — pi's per-request idle ceiling, 300 s by default. It
-  can be tightened but not lifted, so on genuinely slow hardware a long prompt
-  can still time out. Keeping the context small is the real fix.
+- **`compaction`** — the defaults are `reserveTokens` 16384 and
+  `keepRecentTokens` 20000, and both are at or above this workshop's entire
+  16,384-token window. The two break it in different ways, which is worth
+  separating because only one of them is the reason nothing happens.
+
+  Compaction triggers when `contextTokens > contextWindow - reserveTokens`. At a
+  16,384 window with 16384 reserved that threshold is **zero**, so the trigger is
+  always true from the first message. Then, to decide what to summarise, pi walks
+  backwards from the newest message keeping `keepRecentTokens` of it — and 20,000
+  is more than the window can hold, so the walk keeps *everything* and there is
+  nothing left to summarise.
+
+  So the trigger fires constantly and then does nothing: **`keepRecentTokens` is
+  what makes it inert**, not `reserveTokens`. Both have to sit below the window.
+  6144 and 3000 give a trigger at 10,240 tokens and keep the last 3,000, which
+  behaves as intended.
+- **`httpIdleTimeoutMs: 0`** — pi's HTTP idle timeout, 300 s by default, and `0`
+  disables it. This is an **idle** timeout, not a total one: it measures the gap
+  between bytes, so a streaming response that is slow but still arriving does not
+  trip it. What does trip it is prompt processing, where the server accepts the
+  request and sends nothing at all for minutes while it works through a long
+  prompt. On a slow CPU that is exactly the shape of a normal first request, so
+  the ceiling comes off. Keeping the context small remains the real fix.
 
 One counter-intuitive finding worth knowing before you reach for it: **pi's
 subagent extension will usually make things *slower* here.** On a single-slot
