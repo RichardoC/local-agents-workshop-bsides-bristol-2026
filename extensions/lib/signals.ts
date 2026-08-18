@@ -594,7 +594,17 @@ function checkBrand(
     // distance 2 this check was wrong more often than right. Catching rn/m
     // properly wants a confusable-character map, not a bigger budget, and that
     // is a good exercise.
+    // Edit distance is only informative when the brand is long enough that its
+    // one-edit neighbourhood is sparse. Measured on the corpus at distance 1:
+    // every single remaining hit was a real, unrelated domain, and all of them
+    // were short brands — mega.nz/meta, info.mrc.org/hmrc, hsb.com/hsbc,
+    // did.li/dpd, steamo.de/steam. A four-letter brand is one edit from an
+    // enormous number of legitimate four-letter domains, so the check cannot
+    // say anything useful about it. Six characters is where it starts to mean
+    // something, and it still catches the cases worth catching: paypa1/paypal
+    // and micros0ft/microsoft.
     const budget = 1;
+    if (brand.length < 6) continue;
     const dist = editDistance(regLabel, brand, budget);
     if (
       dist > 0 &&
@@ -603,10 +613,8 @@ function checkBrand(
     ) {
       hits.push({
         id: "lookalike_domain",
-        // A fuzzy match is a lead, not a finding. Demoted from high, and the
-        // detail says so, so the model does not present a guess as a fact.
-        severity: "medium",
-        detail: `${where} host ${hostname} is ${dist} character away from "${brand}". This is a fuzzy match and may be coincidence.`,
+        severity: "high",
+        detail: `${where} host ${hostname} is ${dist} character away from "${brand}", which is a brand this kind of message often impersonates.`,
       });
       continue;
     }

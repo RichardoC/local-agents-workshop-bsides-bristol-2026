@@ -15,13 +15,20 @@
 # because it is the smaller download:
 #   WORKSHOP_MODEL=granite-3b ./pi-workshop.sh
 # Whichever you pick, the llamafile you are running must be the matching one.
+#
+# If your machine is too slow to run a model locally and a hosted endpoint has
+# been set up for the session, use that instead — see the "hosted" provider in
+# .pi/agent/models.json:
+#   export HF_TOKEN=hf_...
+#   WORKSHOP_PROVIDER=hosted WORKSHOP_MODEL=granite-3b-hosted ./pi-workshop.sh
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Which of the models in .pi/agent/models.json to use. Both are configured with
-# the same 16384-token context window, so the server command is identical either
+# Which provider and model in .pi/agent/models.json to use. The two local models
+# share a 16384-token context window, so the server command is identical either
 # way — only the .llamafile you run differs.
+WORKSHOP_PROVIDER="${WORKSHOP_PROVIDER:-local}"
 WORKSHOP_MODEL="${WORKSHOP_MODEL:-bonsai-8b}"
 
 # --no-model: skip the health check and start anyway. /phish still works, since
@@ -72,6 +79,23 @@ export PI_CODING_AGENT_DIR="$PWD/.pi/agent"
 export NO_PROXY="127.0.0.1,localhost${NO_PROXY:+,$NO_PROXY}"
 export no_proxy="$NO_PROXY"
 
+# A hosted endpoint has no local server to check, and needs a token.
+if [ "$WORKSHOP_PROVIDER" != "local" ]; then
+  require_model=0
+  if [ -z "${HF_TOKEN:-}" ]; then
+    cat >&2 <<'EOF'
+WORKSHOP_PROVIDER is not "local", so a hosted endpoint is expected — but HF_TOKEN
+is not set, and pi will not offer a model it has no credentials for.
+
+  export HF_TOKEN=hf_...
+
+Also check that baseUrl in .pi/agent/models.json has been filled in: it ships as
+a REPLACE-ME placeholder.
+EOF
+    exit 1
+  fi
+fi
+
 if [ "$require_model" -eq 1 ] &&
    ! curl -sf --noproxy 127.0.0.1 http://127.0.0.1:8080/health > /dev/null 2>&1; then
   cat >&2 <<'EOF'
@@ -111,7 +135,7 @@ done
 # and similar). Everything here is local, and on conference wifi a blocking
 # startup fetch is exactly the kind of thing that looks like a hang.
 exec "$pi_bin" \
-  --provider local --model "$WORKSHOP_MODEL" \
+  --provider "$WORKSHOP_PROVIDER" --model "$WORKSHOP_MODEL" \
   --system-prompt "$(cat workshop-system-prompt.md)" \
   --offline \
   -nbt \

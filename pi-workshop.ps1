@@ -13,6 +13,14 @@
 #   $env:WORKSHOP_MODEL = "granite-3b"; .\pi-workshop.ps1
 # Whichever you pick, the llamafile you are running must be the matching one.
 #
+# If your machine is too slow to run a model locally and a hosted endpoint has
+# been set up for the session, use that instead — see the "hosted" provider in
+# .pi\agent\models.json:
+#   $env:HF_TOKEN = "hf_..."
+#   $env:WORKSHOP_PROVIDER = "hosted"
+#   $env:WORKSHOP_MODEL = "granite-3b-hosted"
+#   .\pi-workshop.ps1
+#
 # If PowerShell refuses to run this, it is the execution policy, not the script:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
@@ -22,7 +30,8 @@ Set-Location -Path $PSScriptRoot
 # Which of the models in .pi\agent\models.json to use. Both are configured with
 # the same 16384-token context window, so the server command is identical either
 # way — only the .llamafile you run differs.
-$workshopModel = if ($env:WORKSHOP_MODEL) { $env:WORKSHOP_MODEL } else { "bonsai-8b" }
+$workshopModel    = if ($env:WORKSHOP_MODEL)    { $env:WORKSHOP_MODEL }    else { "bonsai-8b" }
+$workshopProvider = if ($env:WORKSHOP_PROVIDER) { $env:WORKSHOP_PROVIDER } else { "local" }
 
 # --no-model: skip the health check and start anyway. /phish still works, since
 # it never calls the model. Anything you type at the agent will fail, which is
@@ -68,6 +77,23 @@ $env:PI_CODING_AGENT_DIR = Join-Path $PWD ".pi\agent"
 # Corporate proxies otherwise swallow requests to your own machine.
 $env:NO_PROXY = if ($env:NO_PROXY) { "127.0.0.1,localhost,$($env:NO_PROXY)" } else { "127.0.0.1,localhost" }
 $env:no_proxy = $env:NO_PROXY
+
+# A hosted endpoint has no local server to check, and needs a token.
+if ($workshopProvider -ne "local") {
+    $requireModel = $false
+    if (-not $env:HF_TOKEN) {
+        Write-Host -ForegroundColor Red @"
+WORKSHOP_PROVIDER is not "local", so a hosted endpoint is expected — but HF_TOKEN
+is not set, and pi will not offer a model it has no credentials for.
+
+  `$env:HF_TOKEN = "hf_..."
+
+Also check that baseUrl in .pi\agent\models.json has been filled in: it ships as
+a REPLACE-ME placeholder.
+"@
+        exit 1
+    }
+}
 
 if ($requireModel) {
     try {
@@ -118,5 +144,5 @@ $systemPrompt = Get-Content -Path "workshop-system-prompt.md" -Raw
 #
 # --offline stops pi making network calls at startup. Everything here is local,
 # and on conference wifi a blocking startup fetch looks exactly like a hang.
-& $piBin --provider local --model $workshopModel --system-prompt $systemPrompt `
+& $piBin --provider $workshopProvider --model $workshopModel --system-prompt $systemPrompt `
     --offline -nbt @extArgs @passthrough

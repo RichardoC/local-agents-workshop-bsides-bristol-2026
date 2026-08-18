@@ -289,9 +289,15 @@ test("lookalike_domain does not fire on unrelated real companies", () => {
 });
 
 test("checkBrand reports every brand signal for a host, not just the first", () => {
-  // The loop `return`s on the first match, so a host that both name-drops one
-  // brand and typo-squats another only ever reports one of them.
-  const ids = signalIds(["From: IT <admin@microsoft-login.appl3.com>"], "hello");
+  // The loop used to `return` on the first match, so a host that both name-drops
+  // one brand and typo-squats another only ever reported one of them.
+  //
+  // This was written as microsoft-login.appl3.com, but "apple" is five
+  // characters and the lookalike check now ignores brands shorter than six —
+  // measured, because at four or five characters every corpus hit was an
+  // unrelated real domain. "paypa1" vs "paypal" exercises the same property
+  // with a brand long enough for edit distance to mean anything.
+  const ids = signalIds(["From: IT <admin@microsoft-login.paypa1.com>"], "hello");
   assert.ok(ids.includes("brand_in_subdomain"), JSON.stringify(ids));
   assert.ok(ids.includes("lookalike_domain"), JSON.stringify(ids));
 });

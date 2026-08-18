@@ -172,6 +172,38 @@ Two things about it are worth knowing before Friday:
   is asleep the first request also pulls the ~320 MB loader, so give it a minute.
 
 <details>
+<summary>If your machine is too slow to run a model at all</summary>
+
+There is a `hosted` provider in `.pi/agent/models.json` for exactly this. It
+ships as a **placeholder** — `baseUrl` says `REPLACE-ME` — and is invisible to pi
+until both the URL is filled in and a token is present, so it cannot get in your
+way if it is unused.
+
+If a hosted endpoint has been set up for the session:
+
+```bash
+export HF_TOKEN=hf_...
+WORKSHOP_PROVIDER=hosted WORKSHOP_MODEL=granite-3b-hosted ./pi-workshop.sh
+```
+
+```powershell
+$env:HF_TOKEN = "hf_..."
+$env:WORKSHOP_PROVIDER = "hosted"; $env:WORKSHOP_MODEL = "granite-3b-hosted"
+.\pi-workshop.ps1
+```
+
+No local server is needed on this path, and the launcher skips the health check.
+The token is read from the environment and never written to a file — do not paste
+it into `models.json`, which is committed.
+
+Everything else behaves identically, because the endpoint runs the same
+llama.cpp server the local llamafile does. Two things to expect: an endpoint
+scaled to zero returns HTTP 503 for a minute or two while it wakes, and the
+`contextWindow` in the config must match whatever the endpoint actually serves
+(`curl -s -H "Authorization: Bearer $HF_TOKEN" <host>/props | grep -o '"n_ctx":[0-9]*'`).
+</details>
+
+<details>
 <summary>Using a different model entirely</summary>
 
 Any GGUF on Hugging Face works — point the generator at
@@ -526,7 +558,7 @@ than merely present.
 
 Across all 8,614 real samples in the corpus, the deterministic checks alone raise
 at least one signal on **62%** of them, and a high-severity one on 29%, at about
-1.5 ms each.
+0.7 ms each.
 
 Those numbers used to be higher — 69% and 41% — until the checks were measured
 against the corpus properly. `brand_in_subdomain` alone was firing on 11.7% of
@@ -689,15 +721,40 @@ Please don't feed the samples into a live mail system.
 
 ## Tuning pi for a small model
 
-Everything above is the workshop path. If you want to go further — subagents to
-keep context short, recovering from broken tool calls, and the `settings.json`
-values that matter when prompt evaluation runs at single-digit tokens per second
-— see [docs/small-model-tuning.md](docs/small-model-tuning.md).
+`.pi/agent/settings.json` in this repository carries a few values that matter
+when the model is slow. They are already applied by the launcher, but they are
+worth understanding rather than copying:
 
-The headline is unintuitive: **subagents will usually make this *slower*.** On a
-single-slot CPU server the KV cache is what keeps turns cheap, and every subagent
-is a cache miss that also evicts the parent's prefix. They are the right tool for
-avoiding the long-session cliff, not for latency.
+```json
+{
+  "httpIdleTimeoutMs": 0,
+  "retry": { "maxRetries": 1, "provider": { "timeoutMs": 3600000 } },
+  "compaction": { "reserveTokens": 6144, "keepRecentTokens": 3000 }
+}
+```
+
+- **`retry.maxRetries: 1`** — the default is 3. When a request takes twenty
+  minutes, three extra attempts is over an hour of identical failing work, and it
+  looks exactly like an agent stuck in a loop.
+- **`compaction`** — the defaults (`reserveTokens` 16384, `keepRecentTokens`
+  20000) are both larger than this workshop's entire 16,384-token window, which
+  makes automatic compaction inert. Sized below the window it fires as intended.
+- **`httpIdleTimeoutMs`** — pi's per-request idle ceiling, 300 s by default. It
+  can be tightened but not lifted, so on genuinely slow hardware a long prompt
+  can still time out. Keeping the context small is the real fix.
+
+One counter-intuitive finding worth knowing before you reach for it: **pi's
+subagent extension will usually make things *slower* here.** On a single-slot
+server the KV cache is what keeps turns cheap, and every subagent is a cache miss
+that also evicts the parent's prefix — one cheap incremental turn becomes two
+expensive cold ones. Subagents are the right tool for avoiding the long-session
+context cliff, not for latency.
+
+The full working-out behind all of the above — including the experiments that
+produced these settings and the ones that produced wrong answers first — is in
+[docs/small-model-tuning.md](docs/small-model-tuning.md) and
+[docs/investigation/](docs/investigation/README.md). Those are on this branch
+only; the attendee-facing branch deliberately omits them.
 
 ---
 

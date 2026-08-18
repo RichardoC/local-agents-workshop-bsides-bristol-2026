@@ -110,7 +110,7 @@ Then the table that is the actual takeaway:
 | `phish-triage.ts` | Summarise and explain | Yes |
 
 62% of 8,614 real samples raise at least one signal with no model at all — 29%
-raise a high-severity one — at about 1.5 ms each. Say that number out loud; it
+raise a high-severity one — at about 0.7 ms each. Say that number out loud; it
 reframes what the model is for.
 
 Worth telling the room where those numbers came from, because it is the best
@@ -230,6 +230,7 @@ checks them.
 | "Request timed out" after ~20 min | 300s per-request limit vs slow prompt eval | Keep the server warm, avoid `--resume`/`--fork`, `/compact` |
 | Same request repeats over and over | The above, retrying — **not** a sampler problem | Do not touch `repeat_penalty` |
 | Server crashes at startup | Vulkan/driver | `--gpu disable` |
+| Machine far too slow to be usable, or cannot run the binary at all | 8 GB RAM and a browser open, ancient CPU, or a managed laptop that blocks unsigned executables | If a hosted endpoint has been set up: `export HF_TOKEN=... ; WORKSHOP_PROVIDER=hosted WORKSHOP_MODEL=granite-3b-hosted ./pi-workshop.sh`. Otherwise `--no-model` plus `/phish`, and pair them with a neighbour for the agent half. |
 | `Exec format error` / `run-detectors: unable to find an interpreter` | APE binary handed to the wrong interpreter (common with WINE installed, and under WSL) | `sh ./bonsai.llamafile --server ...` — works everywhere |
 | Hangs before any output | Corporate proxy intercepting 127.0.0.1 | `NO_PROXY=127.0.0.1,localhost` (the launcher sets it) |
 | `pi: command not found` | Static build not extracted, or extracted elsewhere | Extract so `./pi/pi` exists, or set `PI_BIN` |
