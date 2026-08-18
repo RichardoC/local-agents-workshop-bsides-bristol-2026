@@ -25,6 +25,7 @@ import { Type } from "typebox";
 import { parseEmail } from "./lib/eml.ts";
 import { repairPathArgs } from "./lib/repair.ts";
 import { triage, type Triage } from "./lib/signals.ts";
+import { assess, glossAuthVerdict } from "./lib/verdict.ts";
 
 /**
  * Directories to fall back to when a bare filename is given.
@@ -65,10 +66,13 @@ function render(t: Triage, path: string): string {
   if (t.replyTo.address) lines.push(`REPLY-TO: ${t.replyTo.address}`);
   if (t.returnPath.address) lines.push(`RETURN-PATH: ${t.returnPath.address}`);
   lines.push(`DATE: ${t.date || "(none)"}`);
+  // Gloss the verdicts rather than emitting bare tokens. Measured: the model
+  // maps none/permerror/temperror onto pass/fail language in both directions,
+  // and that was the single most common unsupported claim it made.
   lines.push(
     t.auth.absent
-      ? "AUTH: no Authentication-Results header present"
-      : `AUTH: spf=${t.auth.spf || "-"} dkim=${t.auth.dkim || "-"} dmarc=${t.auth.dmarc || "-"}`,
+      ? "AUTH: no Authentication-Results header present (no verdict was recorded — not a failure)"
+      : `AUTH: spf=${glossAuthVerdict(t.auth.spf ?? "")} dkim=${glossAuthVerdict(t.auth.dkim ?? "")} dmarc=${glossAuthVerdict(t.auth.dmarc ?? "")}`,
   );
   lines.push(`RECEIVED HOPS: ${t.hops}`);
 
@@ -98,6 +102,17 @@ function render(t: Triage, path: string): string {
     }
   }
 
+  // State the overall conclusion right next to the evidence.
+  //
+  // Without this the model saw only a signal list and supplied its own verdict
+  // from whatever looked salient — usually the subject line. Measured: real
+  // messages raising zero signals were still called phishing 19 times out of
+  // 19, and one message with a HIGH signal was called "likely legitimate"
+  // because SPF passed. The equivalent instruction in the system prompt is
+  // hundreds of tokens away; this is adjacent, and that is what makes it work.
+  lines.push("");
+  lines.push(`ASSESSMENT: ${assess(t.signals).line}`);
+
   lines.push("");
   lines.push(
     "NOTE: signals above are facts extracted from the message itself. No DNS, " +
@@ -122,6 +137,8 @@ export default function (pi: ExtensionAPI) {
       "When the user names a .eml file, call phish_triage with the path exactly as they wrote it.",
       "Base your verdict only on the signals the tool returns. Do not invent header values.",
       "If the tool returns no signals, say the message looks unremarkable rather than inventing concerns.",
+      "Quote hostnames, domains and addresses exactly as the tool printed them. Do not paraphrase or retype them from memory.",
+      "Follow the ASSESSMENT line. Do not overturn it using the subject line, sender name, or a passing SPF/DKIM/DMARC result.",
     ],
     parameters: Type.Object({
       path: Type.String({
