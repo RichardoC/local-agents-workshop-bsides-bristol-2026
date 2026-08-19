@@ -140,6 +140,56 @@ If it still struggles, drop to `-c 8192` — and change `contextWindow` in
 `.pi/agent/models.json` to match, or you hit the silent one-token failure the
 README describes.
 
+## Following instructions: the difference that decides the skills track
+
+Both models are correct on the phishing exercise. They are **not** equally good at
+following a fixed output format, and that gap only shows up on the skills track.
+
+Measured on the same documents, same prompts, both via GPU endpoints so speed is
+not a factor:
+
+| | Bonsai 8B Q1_0 | Granite 4.1 3B Q6_K |
+|---|---|---|
+| Phishing verdicts (6 synthetic samples) | **6/6 correct** | **6/6 correct** |
+| Names the right signal | yes | yes |
+| Calls a tool when asked to analyse a file | yes | yes |
+| STRIDE: grounded in the real document | yes | yes |
+| STRIDE: six-row table, correct categories | **no** | **yes** |
+| Obeys `/skill:` + tool together | **no** — threat models the skill file | yes |
+
+Bonsai produces a grounded, genuinely useful analysis and then writes it however it
+likes: bullets instead of the table, and invented categories — "Confidentiality",
+"Integrity", "Availability", which belong to a different framework. Asked with the
+`/skill:` prefix it goes further wrong and threat models *the skill instructions*
+rather than the document, because the skill text is the most recent structured thing
+in its context.
+
+That is what one bit per weight costs, and it is worth knowing precisely: Q1_0
+preserves enough of the model to reason about a document and to call a tool, and not
+enough to hold a six-row schema while doing it.
+
+**If you want the skills track, use Granite.** If you are on Bonsai, the phishing
+half of the workshop is unaffected, and a threat model will still tell you true
+things about your document — just not in the shape the skill asks for.
+
+### What we changed because of this
+
+Three things, and the pattern is the same each time: move the requirement out of the
+model's judgement and into code.
+
+- **`threat_model` returns the document *and* the format together.** Instructions
+  that arrive in a tool result are recent context and get followed. The same
+  instructions sitting in a skill body a few thousand tokens earlier do not. Before
+  this, Bonsai invented "a microservices-based architecture with API gateways" for a
+  document about a badge scanner.
+- **A `<placeholder>` skeleton in the skill was worse than no example.** Granite had
+  been copying a *filled-in* example, so it was replaced with a placeholder
+  skeleton — and Bonsai then echoed the placeholders verbatim as its answer. Neither
+  model should be shown a shape it can copy. The format is now described, not drawn.
+- **The tools refuse rather than trusting the model.** `phish_triage` rejects files
+  that are not email; `read_design_document` repairs a dropped directory. Both work
+  identically on both models, because neither is a matter of opinion.
+
 ## The honest caveat
 
 **Our test saturated.** Both models scored 38/38, so this comparison cannot
