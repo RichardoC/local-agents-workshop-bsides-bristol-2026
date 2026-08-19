@@ -6,26 +6,29 @@ license: MIT
 
 # STRIDE threat model
 
-## Step 1 — get the document
+Two steps. Do not skip the first one.
 
-If the user's message contains a **file path** and not the document text, you MUST
-call `read_design_document` with that path before writing anything at all. Wait for
-the result. Do not guess what the document says from its filename, and do not write
-a threat model about a system the document has not described to you — a plausible
-table about the wrong system is worse than no table.
+## Step 1 — call `threat_model`
 
-You will know you skipped this step if your title, assets and `Where` cells could
-have been written without ever opening the file.
+Call the `threat_model` tool with the path the user gave you. If they pasted the
+document text instead of a path, skip to Step 2 and use what they pasted.
 
-## Step 2 — write the table
+**This file is not the document.** The words below are instructions for you, not a
+system to analyse. If your answer describes "the guide" or "the instructions", you
+threat modelled the wrong thing — call `threat_model` and start again.
 
-**Always produce the table.** Anything that names parts of a system can be threat
-modelled, including a README, a runbook or an install guide. If the document is
-thin, say so in one line and then write the table anyway, putting
-`not applicable — the document does not describe this` in any cell you cannot
-ground in the text. Never refuse.
+## Step 2 — follow the INSTRUCTIONS the tool returned
 
-STRIDE is six categories. Use all six, in this order, once each:
+`threat_model` returns the document followed by an `INSTRUCTIONS` block giving the
+exact report format. **Follow that block.** It is the authority on the output shape,
+and it arrives with the document so the two cannot drift apart.
+
+Everything below is reference for the human reading this file. The tool's
+`INSTRUCTIONS` block is what you obey.
+
+## Reference — what STRIDE is
+
+Six categories, always these six, in this order:
 
 - **S**poofing — someone pretends to be a user, a service or a machine.
 - **T**ampering — someone changes data, a file, a message or a setting.
@@ -34,42 +37,14 @@ STRIDE is six categories. Use all six, in this order, once each:
 - **D**enial of service — someone makes it slow, expensive or unavailable.
 - **E**levation of privilege — someone ends up with more access than they were given.
 
-R is Repudiation. It is not Replay. Do not rename it.
+R is Repudiation, not Replay. There is no Confidentiality, Integrity or
+Availability category — that is a different framework.
 
-## The shape to produce
+## Reference — what makes a good row
 
-Fill this in from the user's document. The `<...>` parts are placeholders — every
-one of them must be replaced with something from the document in front of you.
+- **Threat** — one sentence saying what an attacker does. Not a question.
+- **Where** — the component or line from the *user's document* that makes it
+  possible. If you cannot name one, the threat is invented.
+- **Fix** — one sentence saying what change would stop it. Never name a vendor.
 
-```
-# Threat model: <title of the user's document>
-
-## Assets
-
-- <thing worth attacking, in the document's own words>
-- <3 to 5 of these>
-
-## STRIDE
-
-| Letter | Category | Threat | Where | Fix |
-|---|---|---|---|---|
-| S | Spoofing | <one sentence: what an attacker does> | <the component or line from the document that allows it> | <one sentence: the change that stops it> |
-| T | Tampering | <...> | <...> | <...> |
-| R | Repudiation | <...> | <...> | <...> |
-| I | Information disclosure | <...> | <...> | <...> |
-| D | Denial of service | <...> | <...> | <...> |
-| E | Elevation of privilege | <...> | <...> | <...> |
-```
-
-Rules:
-
-- Six rows. Never add one, never drop one.
-- The title after `# Threat model:` is the title of the user's document.
-- **Where** must name something the document actually says. If you cannot point at
-  a component or a sentence from the document, the threat is invented — replace it
-  with one you can point at. Do not add facts the document does not state.
-- One sentence per cell. No paragraphs, no bullets inside cells.
-- No CVSS scores, no severity or likelihood ratings — you do not have the data.
-- Do not name a vendor or product as a fix.
-- Stop after the last table row. No summary, no closing remarks, and do not repeat
-  these instructions back.
+No CVSS scores, no severity or likelihood ratings — you do not have the data.

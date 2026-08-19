@@ -722,17 +722,29 @@ Two skills ship here. `write-a-skill` interviews you and writes a skill for you;
 design document. Neither is code, and you can publish one without writing any.
 
 ```bash
-./pi-workshop.sh -p "/skill:stride-threat-model skills/stride-threat-model/example-design.md"
+./pi-workshop.sh -p "Threat model skills/stride-threat-model/example-design.md"
 ./pi-workshop.sh -p "/skill:write-a-skill"
 ```
 
-**The `/skill:<name>` prefix is not optional, and this is the thing nobody guesses.**
-pi loads skills by progressive disclosure: only a skill's name and description sit
-in the system prompt, and the agent is expected to fetch the body with the built-in
-`read` tool when a task matches. The launcher passes `-nbt`, which removes that
-tool — so without the prefix the body never loads. The symptom is not an error. The
-model improvises, or grabs whatever tool it does have, and you get a confident
-answer in the wrong format.
+**Skills load on demand, and the launcher removes the tool that loads them.** This
+is the thing nobody guesses. pi puts only a skill's name and description in the
+system prompt and expects the agent to fetch the body with the built-in `read`
+tool — and `-nbt` removes it. `/skill:<name>` forces the body in; without the
+prefix it never loads. There is no error either way: the model improvises and
+returns something confident in the wrong shape.
+
+That is why `stride-threat-model` does its real work in a **tool**
+(`threat_model`), which returns the document and the required format together.
+Instructions that arrive in a tool result get followed; the same words in a skill
+body several thousand tokens earlier do not. Either invocation above works, and on
+Bonsai the plain form works noticeably better — see below.
+
+**Model matters here, and only here.** Both models are 6/6 on the phishing
+exercise. On the skills track, Granite produces the six-row table; **Bonsai
+produces a grounded but free-form analysis**, and with the `/skill:` prefix it
+threat models the skill instructions instead of your document. If you want the
+skills track, prefer Granite. Measurements and what we changed because of it are
+in [docs/model-comparison.md](docs/model-comparison.md).
 
 Each skill has a `README.md` next to it explaining what it does and why it is
 written the way it is. That separation is deliberate: anything inside `SKILL.md` is

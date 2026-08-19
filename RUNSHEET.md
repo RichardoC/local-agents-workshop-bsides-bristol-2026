@@ -290,11 +290,20 @@ the better path for anyone strong on security and light on programming.
 ./pi-workshop.sh -p "/skill:stride-threat-model docs/design.md" # a worked example
 ```
 
-**Say the `/skill:` prefix out loud, twice.** It is required and nobody guesses it:
-pi keeps only a skill's description in the prompt and fetches the body with the
-built-in `read` tool, which `-nbt` removes. Without the prefix the body never loads
-and the model improvises — no error, just a confident answer in the wrong shape.
-That one detail cost the most debugging time in this repo.
+**Two things to say out loud here.**
+
+First, how skills load: pi keeps only a skill's description in the prompt and
+fetches the body with the built-in `read` tool, which `-nbt` removes. `/skill:<name>`
+forces it in; without the prefix the body never loads, with no error. That detail
+cost the most debugging time in this repo, and it is why the STRIDE skill does its
+real work in a tool that returns the document and the format together.
+
+Second, **model choice matters on this track and nowhere else.** Both models are
+6/6 on the phishing exercise. On STRIDE, Granite produces the six-row table;
+Bonsai produces a grounded but free-form analysis, and with the `/skill:` prefix it
+threat models the skill instructions instead of the document. **Steer anyone on
+Bonsai to `Threat model <path>` without the prefix, and set expectations: they get
+real findings in the wrong shape.** If they want the table, they want Granite.
 
 Worth showing the room deliberately: run `/skill:write-a-skill` and have it produce
 a skill, then read what it wrote. Granite reliably slips on one of its own rules —
