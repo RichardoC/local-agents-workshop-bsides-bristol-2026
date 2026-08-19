@@ -44,10 +44,13 @@ import { repairPathArgs } from "./lib/repair.ts";
 /**
  * Truncate rather than silently overflowing a small model's context window.
  *
- * 12k characters is roughly 3k tokens. That has to fit alongside the skill body,
- * the tool definitions and the reply inside a 16,384-token window -- which is what
- * both models run here, and what the Bonsai endpoint reports too. 40k characters
- * fits Granite's native window and silently does not fit this one.
+ * 12k characters is roughly 3k tokens, which has to fit alongside the skill body,
+ * the tool definitions and the reply inside the 16,384-token window BOTH LOCAL
+ * models run -- the cap the workshop sets to keep KV cache off an 8 GB laptop, not
+ * a limit of either model. Bonsai's own context is 65,536 and Granite's is 131,072.
+ *
+ * 40k characters is fine at those sizes and silently is not at 16,384, so the
+ * smaller cap is the one that has to hold.
  */
 const MAX_CHARS = 12_000;
 
