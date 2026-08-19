@@ -572,6 +572,7 @@ extensions/
 templates/starter/       copy this to begin your own extension (a TOOL)
 templates/starter-skill/ copy this to begin your own extension (a SKILL)
 skills/stride-threat-model/  a worked skill: STRIDE over a design document
+skills/write-a-skill/    a skill that helps you write your own skill
 tools/
   make-samples.mjs    regenerates the synthetic samples
   triage-cli.ts       run the analyser from the shell, with no agent at all
@@ -713,6 +714,29 @@ them into whatever you build. Every domain uses the reserved `.example` TLD, so
 none of them can point at a real organisation even by accident.
 
 Start with `01`. It is legitimate, and the correct output is silence.
+
+### Skills: the no-code path
+
+Two skills ship here. `write-a-skill` interviews you and writes a skill for you;
+`stride-threat-model` is a worked example that produces a STRIDE table from a
+design document. Neither is code, and you can publish one without writing any.
+
+```bash
+./pi-workshop.sh -p "/skill:stride-threat-model skills/stride-threat-model/example-design.md"
+./pi-workshop.sh -p "/skill:write-a-skill"
+```
+
+**The `/skill:<name>` prefix is not optional, and this is the thing nobody guesses.**
+pi loads skills by progressive disclosure: only a skill's name and description sit
+in the system prompt, and the agent is expected to fetch the body with the built-in
+`read` tool when a task matches. The launcher passes `-nbt`, which removes that
+tool — so without the prefix the body never loads. The symptom is not an error. The
+model improvises, or grabs whatever tool it does have, and you get a confident
+answer in the wrong format.
+
+Each skill has a `README.md` next to it explaining what it does and why it is
+written the way it is. That separation is deliberate: anything inside `SKILL.md` is
+text the model may echo into its answer.
 
 ### What we deliberately do not do
 

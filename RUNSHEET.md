@@ -281,12 +281,26 @@ the moment the afternoon clicks.
 
 ## 15:25 — Build (25 min)
 
-**Already ahead, or bored?** There is a second track nobody finds on their own:
-`templates/starter-skill/` is a skill package rather than a tool, and
-`skills/stride-threat-model/` is a worked example of one. A skill is instructions,
-not code — no TypeScript at all — which makes it the better path for anyone strong
-on security and light on programming. The launcher loads every skill in `skills/`,
-so paste a design document at the agent and watch it produce a STRIDE table.
+**Already ahead, or not a programmer?** There is a second track nobody finds on
+their own. A skill is instructions, not code — no TypeScript at all — which makes it
+the better path for anyone strong on security and light on programming.
+
+```bash
+./pi-workshop.sh -p "/skill:write-a-skill"                      # writes a skill for them
+./pi-workshop.sh -p "/skill:stride-threat-model docs/design.md" # a worked example
+```
+
+**Say the `/skill:` prefix out loud, twice.** It is required and nobody guesses it:
+pi keeps only a skill's description in the prompt and fetches the body with the
+built-in `read` tool, which `-nbt` removes. Without the prefix the body never loads
+and the model improvises — no error, just a confident answer in the wrong shape.
+That one detail cost the most debugging time in this repo.
+
+Worth showing the room deliberately: run `/skill:write-a-skill` and have it produce
+a skill, then read what it wrote. Granite reliably slips on one of its own rules —
+told not to include filled-in examples, it includes them and sometimes adds a line
+claiming it did not. **Small models follow structure well and self-assess badly**,
+and seeing that live is worth more than being told.
 
 Now they extend their own thing. The template's `word_count` is a placeholder to
 be replaced. Same rule as everything else: deterministic core in `lib/`, thin pi
