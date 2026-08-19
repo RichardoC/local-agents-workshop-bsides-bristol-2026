@@ -55,6 +55,32 @@ function resolveEmlPath(input: string): string | undefined {
  * lines more reliably than nested JSON, and it costs fewer tokens. The full
  * structured object still goes back in `details` for anything downstream.
  */
+/**
+ * Does this file plausibly contain an email message?
+ *
+ * A `.eml` extension is accepted outright. Otherwise require a real header near
+ * the top: RFC 5322 says a message begins with headers, so a first non-blank line
+ * of `Name: value` is the cheapest honest test, and it still accepts the corpus
+ * files that carry no extension at all.
+ */
+function looksLikeEmail(path: string): boolean {
+  if (/\.eml$/i.test(path)) return true;
+
+  let head: string;
+  try {
+    head = readFileSync(path).subarray(0, 4096).toString("latin1");
+  } catch {
+    return false;
+  }
+
+  const HEADERS = /^(from|to|subject|date|received|message-id|return-path|reply-to|mime-version|authentication-results|delivered-to|x-[a-z0-9-]+):/i;
+  for (const line of head.split(/\r?\n/, 40)) {
+    if (!line.trim()) continue;          // leading blank lines are harmless
+    return HEADERS.test(line);           // first real line decides it
+  }
+  return false;
+}
+
 function render(t: Triage, path: string): string {
   const lines: string[] = [];
 
@@ -196,6 +222,28 @@ export default function (pi: ExtensionAPI) {
             },
           ],
           details: { error: "not_found" },
+        };
+      }
+
+      // Refuse things that are not email, and say what to use instead.
+      //
+      // Without this the tool cheerfully "triages" any text file: handed a
+      // SKILL.md it parsed the markdown as RFC 5322, found no headers, and
+      // reported `auth_results_absent` on a file that was never an email. A
+      // small model with one obvious tool will reach for it whatever you ask,
+      // so the tool has to be the thing that says no.
+      if (!looksLikeEmail(resolved)) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `${resolved} is not an email message, so there is nothing here to triage. ` +
+                `Do not call phish_triage on it again. If you were asked to threat model ` +
+                `or analyse this document, use read_design_document instead.`,
+            },
+          ],
+          details: { error: "not_an_email", path: resolved },
         };
       }
 
