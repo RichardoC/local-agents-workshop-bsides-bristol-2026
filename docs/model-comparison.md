@@ -140,6 +140,40 @@ If it still struggles, drop to `-c 8192` — and change `contextWindow` in
 `.pi/agent/models.json` to match, or you hit the silent one-token failure the
 README describes.
 
+## Context: what a request gets is not what the server was started with
+
+Worth knowing before you set `contextWindow`, because getting it wrong is one of
+the failure modes this repo keeps warning about.
+
+Both models have plenty of context. Bonsai's card says **65,536 tokens**; Granite's
+says **131,072**. The workshop caps both at 16,384 locally, and that is a *RAM*
+decision — KV cache is anonymous memory on the attendee's own laptop — not a limit
+of either model.
+
+The subtlety is on hosted endpoints. **llama.cpp divides total context between
+parallel slots**, so a server launched with `-c 65536 -np 4` gives each *request*
+16,384, and `/props` reports the per-slot number. Two real endpoints, measured:
+
+| | Bonsai endpoint | Granite endpoint |
+|---|---|---|
+| `total_slots` | 4 | 1 |
+| `n_ctx` from `/props` | 16,384 | 131,072 |
+| launched with | `-c 65536` | `-c 131072` |
+| usable by one request | **16,384** | **131,072** |
+
+Same total on the Bonsai box as the model supports, quartered by `-np 4`. Confirmed
+by asking for more than a slot holds:
+
+```
+request (20020 tokens) exceeds the available context size (16384 tokens)
+```
+
+So set `contextWindow` to the `n_ctx` that `/props` reports, which is per-slot —
+not the model's native size and not the `-c` the server was launched with. This
+failure is at least loud: a 400 that names the real figure. The equivalent mistake
+against a *local* server is silent, and produces the one-token empty reply described
+in the README.
+
 ## Following instructions: the difference that decides the skills track
 
 Both models are correct on the phishing exercise. They are **not** equally good at
