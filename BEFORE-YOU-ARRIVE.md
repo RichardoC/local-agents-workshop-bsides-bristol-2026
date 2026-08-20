@@ -104,6 +104,8 @@ pi is the agent we will drive the model with. It is a **single self-contained
 binary — no Node.js, no npm, nothing to install**, and it is a small download, so
 this one is genuinely fine to do on the day.
 
+Obligatory warning, pi is an agent harness and *will allow the LLM to execute arbitrary code on your machine* - You may want to create a dedicated VM for pi to run in.
+
 Grab your platform's file from the
 [v0.84.2 release](https://github.com/earendil-works/pi/releases/tag/v0.84.2)
 (`pi-darwin-arm64.tar.gz`, `pi-linux-x64.tar.gz`, `pi-windows-x64.zip`, …),
