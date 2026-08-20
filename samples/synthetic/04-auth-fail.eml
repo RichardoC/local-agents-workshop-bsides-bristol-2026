@@ -1,0 +1,24 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from unknown-host-44.example (unknown-host-44.example [192.0.2.201])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Authentication-Results: imap-01.recipient.example;
+	spf=fail smtp.mailfrom=parcel-notice-77.example;
+	dkim=fail header.d=parcel-notice-77.example;
+	dmarc=fail header.from=parcel-notice-77.example
+Return-Path: <noreply@parcel-notice-77.example>
+From: Delivery Notifications <noreply@parcel-notice-77.example>
+To: recipient@recipient.example
+Subject: Your parcel could not be delivered
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.1f77b@parcel-notice-77.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+We attempted delivery of your parcel and a redelivery fee of GBP 2.99
+is outstanding.
+
+Arrange redelivery within 48 hours or the item will be returned.

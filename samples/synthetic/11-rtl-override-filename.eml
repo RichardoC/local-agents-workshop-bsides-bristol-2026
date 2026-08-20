@@ -1,0 +1,35 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from smtp.docs-transfer-30.example (smtp.docs-transfer-30.example [198.51.100.12])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Authentication-Results: imap-01.recipient.example;
+	spf=pass smtp.mailfrom=docs-transfer-30.example;
+	dkim=pass header.d=docs-transfer-30.example;
+	dmarc=pass header.from=docs-transfer-30.example
+Return-Path: <documents@docs-transfer-30.example>
+From: Document Transfer <documents@docs-transfer-30.example>
+To: recipient@recipient.example
+Subject: Signed contract enclosed
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.7c3e4@docs-transfer-30.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_Part_5501_2048119903"
+
+------=_Part_5501_2048119903
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+The signed contract is attached.
+
+
+------=_Part_5501_2048119903
+Content-Type: application/octet-stream; name="=?utf-8?B?YW5uZXhl4oCuZmRwLmV4ZQ==?="
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="=?utf-8?B?YW5uZXhl4oCuZmRwLmV4ZQ==?="
+
+UGxhY2Vob2xkZXIgYXR0YWNobWVudCBjb250ZW50IGZvciB0aGUgQlNpZGVzIEJyaXN0b2wgd29y
+a3Nob3AuIE5vdCBleGVjdXRhYmxlLg==
+
+------=_Part_5501_2048119903--

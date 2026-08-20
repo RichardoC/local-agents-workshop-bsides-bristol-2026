@@ -1,6 +1,6 @@
 # Local agents workshop — BSides Bristol 2026
 
-Run a capable model on your own laptop, point an open source agent at it, and
+Run a model on your own laptop, point an open source agent at it, and
 extend that agent to do something you actually need. No API keys, no accounts,
 and nothing leaving the machine in front of you.
 
@@ -13,7 +13,7 @@ an open source licence so other people can install it.
 
 ## Before you arrive — please do this at home
 
-The conference wifi will not survive forty people downloading gigabytes at once.
+The conference wifi is not up to forty people downloading gigabytes at once.
 Everything below is a one-off download. **Do it before Friday.**
 
 > **In a hurry?** [**BEFORE-YOU-ARRIVE.md**](BEFORE-YOU-ARRIVE.md) is the
@@ -103,7 +103,7 @@ Get-FileHash pi-windows-x64.zip -Algorithm SHA256   # compare against the file
 You are about to run a binary from the internet, which will then run TypeScript
 from a repository you also got from the internet. Checking the hash is the cheap
 half of that problem. The other half is reading the extension source, which is
-about 1,300 lines and part of the point of the afternoon.
+about 1,900 lines and part of the point of the afternoon.
 </details>
 
 <details>
@@ -128,7 +128,7 @@ against speed.
 | Quantisation | Q1_0 — one bit per weight, extremely aggressive | Q6_K — near-lossless |
 | Parameters | 8 billion | 3.4 billion |
 | Prompt speed, CPU-only laptop | 5.8 tok/s | **30 tok/s** |
-| RAM at the 16k window we use | **~2.6 GiB** | ~3.5 GiB |
+| RAM at the 16k window we use | **3.3 GiB** | 4.1 GiB |
 | Native context | 65,536 | **131,072** |
 | Verdict accuracy on our test set | 38/38 | 38/38 |
 | Model id for `--model` | `bonsai-8b` | `granite-3b` |
@@ -139,9 +139,10 @@ prompts about five times faster**, which is the difference between an agent that
 feels usable and one that feels stuck. Counter-intuitive given it has fewer than
 half the parameters — Q1_0 saves disk and spends it on arithmetic.
 
-**Take Granite if you can afford the 2.93 GiB download.** Take Bonsai if you
-cannot — metered connection, slow line, no time before Friday. It is the
-configured default, and you give up speed rather than correctness.
+**Take Granite if you can afford the 2.93 GiB download** — it is the configured
+default. Take Bonsai if you cannot: metered connection, slow line, no time before
+Friday. You give up speed rather than correctness. You do not have to tell the
+launcher which one you chose; it asks the server.
 
 Measurements — RAM at every window size, speed, and what happens at full
 context — are in [docs/model-comparison.md](docs/model-comparison.md).
@@ -268,6 +269,14 @@ Green across the board means Friday will be about extensions, not setup.
 Two terminals. In the first, start the model server and leave it running —
 **the same command whichever model you downloaded**:
 
+### flag explanation
+- --server # run as an http server exposing ~ the openai completions api, and a simple web ui
+- --gpu disable # only required if your machine is slower using the gpu rather than cpu. Can happen for intel integrated graphics
+- --np 1 # number of parallel requests that can be processed at once, reduces caching efficiency so reduced to one for this workshop
+- -c 16384 # maximum context length, reduced to decrease ram requirements and LLM compute time
+
+### commands
+
 ```bash
 ./bonsai.llamafile  --server --gpu disable -c 16384 -np 1     # Bonsai
 ./granite.llamafile --server --gpu disable -c 16384 -np 1     # or Granite
@@ -275,7 +284,7 @@ Two terminals. In the first, start the model server and leave it running —
 
 It takes a minute or two to load the weights before it will answer anything.
 
-In the second, start the agent. Bonsai is the default, so if that is what you
+In the second, start the agent. granite is the default, so if that is what you
 downloaded there is nothing to choose:
 
 ```bash
@@ -283,7 +292,15 @@ downloaded there is nothing to choose:
 .\pi-workshop.ps1             # Windows PowerShell
 ```
 
-For Granite, name it:
+**You do not normally need to say which model you are using.** The launcher asks
+the server which weights it loaded and matches them, printing what it chose:
+
+```
+Using --model bonsai-8b: the server has Bonsai-8B-Q1_0.gguf loaded.
+Set WORKSHOP_MODEL to override.
+```
+
+Override it if you want to:
 
 ```bash
 WORKSHOP_MODEL=granite-3b ./pi-workshop.sh
@@ -293,10 +310,13 @@ WORKSHOP_MODEL=granite-3b ./pi-workshop.sh
 $env:WORKSHOP_MODEL = "granite-3b"; .\pi-workshop.ps1
 ```
 
-The two must agree. Running the Granite llamafile while pi is told `bonsai-8b`
-does not fail loudly — llamafile serves whatever it loaded and ignores the model
-name in the request, so you simply get the other model's answers under the wrong
-label. `./doctor.sh` reports which weights the server actually has loaded.
+That auto-detection exists because the mismatch is otherwise **silent**, and this
+is the one to understand rather than skim. llamafile serves whatever weights it
+loaded and ignores the model name in the request, so running the Granite llamafile
+while pi is told `bonsai-8b` gives you Granite's answers labelled as Bonsai — with
+Bonsai's sampling applied, since the two are configured differently. No error, no
+warning, and a plausible answer either way. `./doctor.sh` and `.\doctor.ps1` both
+report which weights the server actually has loaded.
 
 Then ask it something:
 
@@ -431,12 +451,13 @@ short system prompt — both push the wall further away.
 There is a second, separate way depth breaks things, and this one is what people
 usually mean when they say the agent "started looping".
 
-pi gives each request 300 seconds. Prompt processing on a slow machine runs at a
-few tokens per second, so a deep conversation takes far longer than that to
-evaluate — we measured a cold 12k-token prompt at 3.5 tokens/second, still only
-49% processed after 19 minutes. The request is abandoned at 300s, the identical
-request goes out again, and it fails at exactly the same point. Four attempts,
-about 1216 seconds, then `Request timed out`.
+Out of the box, pi gives each request a 300-second **idle** timeout. Prompt
+processing on a slow machine runs at a few tokens per second, so a deep
+conversation takes far longer than that to evaluate — we measured a cold
+12k-token prompt at 3.5 tokens/second, still only 49% processed after 19 minutes.
+Worse, prompt processing sends no bytes at all while it works, so an idle timeout
+is exactly the wrong shape for it: the request is abandoned at 300 s, the
+identical request goes out again, and it fails at the same point.
 
 From the outside this looks exactly like an agent stuck in a loop: the same work,
 over and over, no progress. It is not the model, and it is not the sampler —
@@ -451,10 +472,22 @@ machine:
 - restarting the model server, which discards the cache
 - anything that evicts the prefix, which is what multiple slots do — hence `-np 1`
 
-The timeout itself is not configurable: nothing in pi's settings, `models.json`
-or any environment variable exposes it. So the only levers are the ones that keep
-evaluation short — a warm cache, a smaller context, `/compact`, and faster
-hardware.
+**This repository already defuses it**, which is worth knowing before you spend
+an afternoon on the symptom. `.pi/agent/settings.json` sets `httpIdleTimeoutMs: 0`,
+which disables the idle timeout, and `retry.provider.timeoutMs: 3600000`, which
+gives a request an hour. Confirmed on the wire — pi sends `X-Stainless-Timeout:
+3600`. It also sets `retry.maxRetries: 1`, so a genuine failure is two attempts
+rather than four.
+
+The consequence is that a slow prompt now *waits* instead of timing out, which is
+the behaviour you want, and the failure mode changes shape: instead of
+`Request timed out` you get a turn that takes minutes and looks like a hang. That
+is why the advice below still matters — the levers that keep evaluation short are
+a warm cache, a smaller context, `/compact` and faster hardware. They are just no
+longer the difference between working and not working.
+
+If you see `Request timed out` anyway, you are not picking up this repository's
+settings: check you launched from the repo root.
 
 On a laptop with a working GPU this may never appear: at 100+ tokens/second a 12k
 prompt is roughly thirty seconds, nowhere near the limit. It is very much a
@@ -540,9 +573,14 @@ the server terminal and you will see it counting.
 extensions/
   lib/eml.ts          .eml parser      — node: built-ins only, no dependencies
   lib/signals.ts      signal detection — node: built-ins only, no dependencies
-  lib/eml.test.ts     tests            — node:test, no framework
-  phish-triage.ts     the pi extension — a thin wrapper over the two libraries
-templates/starter/    copy this to begin your own extension
+  lib/verdict.ts      the ASSESSMENT line the model is told to follow
+  lib/repair.ts       repairs near-miss tool arguments before validation
+  lib/*.test.ts       tests            — node:test, no framework
+  phish-triage.ts     the pi extension — a thin wrapper over the libraries
+templates/starter/       copy this to begin your own extension (a TOOL)
+templates/starter-skill/ copy this to begin your own extension (a SKILL)
+skills/stride-threat-model/  a worked skill: STRIDE over a design document
+skills/write-a-skill/    a skill that helps you write your own skill
 tools/
   make-samples.mjs    regenerates the synthetic samples
   triage-cli.ts       run the analyser from the shell, with no agent at all
@@ -550,7 +588,8 @@ doctor.sh/.ps1        setup check — run this first if anything misbehaves
 pi-workshop.sh/.ps1   the launcher: finds pi, sets the config, loads extensions
 workshop-system-prompt.md  the short system prompt the launcher uses
 .pi/agent/models.json model config, committed so nobody edits their home directory
-samples/synthetic/    12 samples we wrote, MIT, one signal each
+.pi/agent/settings.json    timeout, retry and compaction values for a slow model
+samples/synthetic/    12 samples we wrote, MIT, built around one signal each
 samples/phishing_pot  optional submodule of 8,600 real emails (see Credits)
 ```
 
@@ -589,16 +628,31 @@ never sees the raw email. That is what makes a small local model useful rather
 than merely present.
 
 Across all 8,614 real samples in the corpus, the deterministic checks alone raise
-at least one signal on **62%** of them, and a high-severity one on 29%, at about
-0.7 ms each.
+at least one signal on **62.5%** of them, and a high-severity one on 29.1%, at
+about 1 ms each.
+
+**Read that as recall, not accuracy**, because the corpus is 100% phishing — it is
+a honeypot collection with no legitimate mail in it. So 62.5% is "how much
+phishing we catch with no model", and the matching precision number — how often we
+are wrong about legitimate mail — is one we cannot compute, because we have no
+legitimate mail to test against. Every figure in this repository was measured for
+recall and eyeballed for precision. That is a real limitation and it is worth
+knowing before quoting any of it.
 
 Those numbers used to be higher — 69% and 41% — until the checks were measured
 against the corpus properly. `brand_in_subdomain` alone was firing on 11.7% of
 all mail, and 97% of those hits were the impersonated brand's *own* servers.
 Calibrating it down to 0.2% is the single biggest improvement in this repo, and
-the exercise that found it is in the run of show. The model earns
-its place on the other 23%, and on turning a list of signals into something a
-human can act on.
+the exercise that found it is in the run of show.
+
+Note how that was found, since it bears on the caveat above: not by measuring
+precision, which the corpus cannot support, but by *reading* the hosts it fired on
+and recognising `storage.googleapis.com`. Eyeballing 1,038 hits is a poor
+substitute for a ham corpus, and it still found a bug that a passing test suite
+did not.
+
+The model earns its place on the other 37.5%, and on turning a list of signals
+into something a human can act on.
 
 ### Signals detected without a model
 
@@ -639,7 +693,7 @@ the text you started with, the domain was never ASCII.
 
 Real phishing trips five checks at once, which teaches you nothing about any of
 them individually. So `samples/synthetic/` has twelve messages we wrote, each
-built to trip **one**:
+built *around* one signal:
 
 | File | Signal |
 |---|---|
@@ -653,8 +707,14 @@ built to trip **one**:
 | `08-homoglyph-punycode.eml` | `punycode_link` |
 | `09-href-text-mismatch.eml` | `href_text_mismatch` |
 | `10-executable-attachment.eml` | `dangerous_attachment` |
-| `11-rtl-override-filename.eml` | `rtl_override_filename` |
+| `11-rtl-override-filename.eml` | `rtl_override_filename`, `dangerous_attachment` |
 | `12-attachment-type-mismatch.eml` | `attachment_type_mismatch` |
+
+Two of them raise more than one signal — `04` records three failed
+authentication verdicts, and `11` is both an RTL-override filename *and* an
+executable — so if you are predicting the output, predict a set rather than a
+single answer. An `.exe` hidden behind a reversed filename genuinely is two
+problems.
 
 Open the `.eml` in a text editor, work out what should fire, then check yourself
 with `/phish`. They are a few kilobytes each and MIT licensed, so you can copy
@@ -662,6 +722,41 @@ them into whatever you build. Every domain uses the reserved `.example` TLD, so
 none of them can point at a real organisation even by accident.
 
 Start with `01`. It is legitimate, and the correct output is silence.
+
+### Skills: the no-code path
+
+Two skills ship here. `write-a-skill` interviews you and writes a skill for you;
+`stride-threat-model` is a worked example that produces a STRIDE table from a
+design document. Neither is code, and you can publish one without writing any.
+
+```bash
+./pi-workshop.sh -p "Threat model skills/stride-threat-model/example-design.md"
+./pi-workshop.sh -p "/skill:write-a-skill"
+```
+
+**Skills load on demand, and the launcher removes the tool that loads them.** This
+is the thing nobody guesses. pi puts only a skill's name and description in the
+system prompt and expects the agent to fetch the body with the built-in `read`
+tool — and `-nbt` removes it. `/skill:<name>` forces the body in; without the
+prefix it never loads. There is no error either way: the model improvises and
+returns something confident in the wrong shape.
+
+That is why `stride-threat-model` does its real work in a **tool**
+(`threat_model`), which returns the document and the required format together.
+Instructions that arrive in a tool result get followed; the same words in a skill
+body several thousand tokens earlier do not. Either invocation above works, and on
+Bonsai the plain form works noticeably better — see below.
+
+**Model matters here, and only here.** Both models are 6/6 on the phishing
+exercise. On the skills track, Granite produces the six-row table; **Bonsai
+produces a grounded but free-form analysis**, and with the `/skill:` prefix it
+threat models the skill instructions instead of your document. If you want the
+skills track, prefer Granite. Measurements and what we changed because of it are
+in [docs/model-comparison.md](docs/model-comparison.md).
+
+Each skill has a `README.md` next to it explaining what it does and why it is
+written the way it is. That separation is deliberate: anything inside `SKILL.md` is
+text the model may echo into its answer.
 
 ### What we deliberately do not do
 
@@ -721,7 +816,7 @@ Do this **early**, while your tool is still a stub. Publishing takes five minute
 when nothing is on fire and twenty when you are also debugging.
 
 ```bash
-git init && git add -A && git commit -m "Initial extension"
+git init -b main && git add -A && git commit -m "Initial extension"
 git remote add origin https://github.com/<you>/<your-repo>
 git push -u origin main
 ```
@@ -784,12 +879,29 @@ worth understanding rather than copying:
 - **`retry.maxRetries: 1`** — the default is 3. When a request takes twenty
   minutes, three extra attempts is over an hour of identical failing work, and it
   looks exactly like an agent stuck in a loop.
-- **`compaction`** — the defaults (`reserveTokens` 16384, `keepRecentTokens`
-  20000) are both larger than this workshop's entire 16,384-token window, which
-  makes automatic compaction inert. Sized below the window it fires as intended.
-- **`httpIdleTimeoutMs`** — pi's per-request idle ceiling, 300 s by default. It
-  can be tightened but not lifted, so on genuinely slow hardware a long prompt
-  can still time out. Keeping the context small is the real fix.
+- **`compaction`** — the defaults are `reserveTokens` 16384 and
+  `keepRecentTokens` 20000, and both are at or above this workshop's entire
+  16,384-token window. The two break it in different ways, which is worth
+  separating because only one of them is the reason nothing happens.
+
+  Compaction triggers when `contextTokens > contextWindow - reserveTokens`. At a
+  16,384 window with 16384 reserved that threshold is **zero**, so the trigger is
+  always true from the first message. Then, to decide what to summarise, pi walks
+  backwards from the newest message keeping `keepRecentTokens` of it — and 20,000
+  is more than the window can hold, so the walk keeps *everything* and there is
+  nothing left to summarise.
+
+  So the trigger fires constantly and then does nothing: **`keepRecentTokens` is
+  what makes it inert**, not `reserveTokens`. Both have to sit below the window.
+  6144 and 3000 give a trigger at 10,240 tokens and keep the last 3,000, which
+  behaves as intended.
+- **`httpIdleTimeoutMs: 0`** — pi's HTTP idle timeout, 300 s by default, and `0`
+  disables it. This is an **idle** timeout, not a total one: it measures the gap
+  between bytes, so a streaming response that is slow but still arriving does not
+  trip it. What does trip it is prompt processing, where the server accepts the
+  request and sends nothing at all for minutes while it works through a long
+  prompt. On a slow CPU that is exactly the shape of a normal first request, so
+  the ceiling comes off. Keeping the context small remains the real fix.
 
 One counter-intuitive finding worth knowing before you reach for it: **pi's
 subagent extension will usually make things *slower* here.** On a single-slot

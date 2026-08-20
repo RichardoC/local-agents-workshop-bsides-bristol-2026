@@ -1,0 +1,37 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from smtp.micros0ft.example (smtp.micros0ft.example [198.51.100.203])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Authentication-Results: imap-01.recipient.example;
+	spf=pass smtp.mailfrom=micros0ft.example;
+	dkim=pass header.d=micros0ft.example;
+	dmarc=pass header.from=micros0ft.example
+Return-Path: <no-reply@notifications.example>
+From: Security Team <no-reply@notifications.example>
+To: recipient@recipient.example
+Subject: Your password expires today
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.6d9f3@notifications.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_Part_8812_1739204411"
+
+------=_Part_8812_1739204411
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Your password expires in 4 hours.
+
+Reset it here: https://login.micros0ft.example/reset
+
+------=_Part_8812_1739204411
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+<html><body>
+<p>Your password expires in 4 hours.</p>
+<p><a href="https://login.micros0ft.example/reset">Reset your password</a></p>
+</body></html>
+
+------=_Part_8812_1739204411--

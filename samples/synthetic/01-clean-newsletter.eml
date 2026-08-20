@@ -1,0 +1,46 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from smtp-out-09.bristol-tech.example (smtp-out-09.bristol-tech.example [198.51.100.71])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Authentication-Results: imap-01.recipient.example;
+	spf=pass smtp.mailfrom=bristol-tech.example;
+	dkim=pass header.d=bristol-tech.example;
+	dmarc=pass header.from=bristol-tech.example
+Return-Path: <newsletter@bristol-tech.example>
+From: Bristol Tech Meetup <newsletter@bristol-tech.example>
+To: attendee@recipient.example
+Subject: August meetup: lightning talks and pizza
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.4b2c9@bristol-tech.example>
+List-Unsubscribe: <https://bristol-tech.example/unsubscribe?id=4b2c9>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_Part_8812_1739204411"
+
+------=_Part_8812_1739204411
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Hello,
+
+This month we have four lightning talks, and pizza from 18:30.
+Doors at 18:00 at the usual place.
+
+Full details: https://bristol-tech.example/events/august
+
+See you there,
+The organisers
+
+------=_Part_8812_1739204411
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+<html><body>
+<p>Hello,</p>
+<p>This month we have four lightning talks, and pizza from 18:30.</p>
+<p><a href="https://bristol-tech.example/events/august">Full details</a></p>
+<p>See you there,<br>The organisers</p>
+</body></html>
+
+------=_Part_8812_1739204411--

@@ -1,0 +1,29 @@
+Received: from mx-in-04.mailhost.example (mx-in-04.mailhost.example [203.0.113.24])
+	by imap-01.recipient.example with ESMTPS id 4bK9Lm2Wq3z;
+	Tue, 18 Aug 2026 09:14:22 +0100 (BST)
+Received: from smtp-out-02.northgate-services.example (smtp-out-02.northgate-services.example [198.51.100.44])
+	by mx-in-04.mailhost.example with ESMTP id 8Rt4Yn6Pv1x;
+	Tue, 18 Aug 2026 09:14:19 +0100 (BST)
+Authentication-Results: imap-01.recipient.example;
+	spf=pass smtp.mailfrom=northgate-services.example;
+	dkim=pass header.d=northgate-services.example;
+	dmarc=pass header.from=northgate-services.example
+Return-Path: <accounts@northgate-services.example>
+From: Northgate Accounts <accounts@northgate-services.example>
+Reply-To: accounts.dept@secure-mail-relay-92.example
+To: finance@recipient.example
+Subject: =?utf-8?B?UkU6IE91dHN0YW5kaW5nIGludm9pY2UgNDQ4MjEg4oCUIHVwZGF0ZWQgYmFuayBkZXRhaWxz?=
+Date: Tue, 18 Aug 2026 09:14:18 +0100
+Message-ID: <20260818081418.7d31f@northgate-services.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Hi,
+
+Following up on invoice 44821. Please note our banking details have
+changed since the last payment run — reply to this message and I will
+send the updated remittance form over.
+
+Best regards,
+Accounts Department

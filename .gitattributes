@@ -1,0 +1,11 @@
+# Windows attendees are explicitly offered Git Bash, and Git for Windows defaults
+# to core.autocrlf=true. A CRLF-converted shell script fails with
+# "/usr/bin/env: 'bash\r': No such file or directory", which is an obscure error
+# for anyone whose first ten minutes this is.
+*.sh    text eol=lf
+*.ps1   text eol=crlf
+
+# The sample emails are RFC 5322 wire format and already carry CRLF inside the
+# blobs. Two of them (RTL override, homoglyph) depend on exact bytes, and their
+# recorded sha256 values are asserted in the tests. Never normalise them.
+*.eml   -text
