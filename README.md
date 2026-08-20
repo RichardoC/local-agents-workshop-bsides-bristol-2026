@@ -1,6 +1,6 @@
 # Local agents workshop — BSides Bristol 2026
 
-Run a capable model on your own laptop, point an open source agent at it, and
+Run a model on your own laptop, point an open source agent at it, and
 extend that agent to do something you actually need. No API keys, no accounts,
 and nothing leaving the machine in front of you.
 
@@ -13,7 +13,7 @@ an open source licence so other people can install it.
 
 ## Before you arrive — please do this at home
 
-The conference wifi will not survive forty people downloading gigabytes at once.
+The conference wifi is not up to forty people downloading gigabytes at once.
 Everything below is a one-off download. **Do it before Friday.**
 
 > **In a hurry?** [**BEFORE-YOU-ARRIVE.md**](BEFORE-YOU-ARRIVE.md) is the
@@ -269,6 +269,14 @@ Green across the board means Friday will be about extensions, not setup.
 Two terminals. In the first, start the model server and leave it running —
 **the same command whichever model you downloaded**:
 
+### flag explanation
+- --server # run as an http server exposing ~ the openai completions api, and a simple web ui
+- --gpu disable # only required if your machine is slower using the gpu rather than cpu. Can happen for intel integrated graphics
+- --np 1 # number of parallel requests that can be processed at once, reduces caching efficiency so reduced to one for this workshop
+- -c 16384 # maximum context length, reduced to decrease ram requirements and LLM compute time
+
+### commands
+
 ```bash
 ./bonsai.llamafile  --server --gpu disable -c 16384 -np 1     # Bonsai
 ./granite.llamafile --server --gpu disable -c 16384 -np 1     # or Granite
@@ -276,7 +284,7 @@ Two terminals. In the first, start the model server and leave it running —
 
 It takes a minute or two to load the weights before it will answer anything.
 
-In the second, start the agent. Bonsai is the default, so if that is what you
+In the second, start the agent. granite is the default, so if that is what you
 downloaded there is nothing to choose:
 
 ```bash
