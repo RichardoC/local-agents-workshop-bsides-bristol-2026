@@ -591,6 +591,7 @@ workshop-system-prompt.md  the short system prompt the launcher uses
 .pi/agent/settings.json    timeout, retry and compaction values for a slow model
 samples/synthetic/    12 samples we wrote, MIT, built around one signal each
 samples/phishing_pot  optional submodule of 8,600 real emails (see Credits)
+samples/tfstate/      a Terraform state file full of secrets a scanner cannot see
 ```
 
 The wrapper scripts replace pi's default system prompt with
@@ -757,6 +758,26 @@ in [docs/model-comparison.md](docs/model-comparison.md).
 Each skill has a `README.md` next to it explaining what it does and why it is
 written the way it is. That separation is deliberate: anything inside `SKILL.md` is
 text the model may echo into its answer.
+
+### Not just email: a Terraform state file
+
+[`samples/tfstate/`](samples/tfstate/) is the other sample, and it is the sharpest
+argument in the repo for using a model at all. It is a synthetic `terraform.tfstate`
+with eleven classes of credential in it — a four-word password, base64 Kubernetes
+secrets, a key with the PEM armour stripped, a CSV of national insurance numbers.
+
+trufflehog 3.90.8 finds **one** of them. The same database password appears twice in
+the file; it catches the one wrapped in `postgresql://user:pass@host` and misses the
+identical string in a plain `"password"` field, because it matches syntax rather than
+recognising secrets. A local model reading the file finds most of the rest.
+
+```bash
+./pi-workshop.sh -p "Use read_design_document on samples/tfstate/terraform.tfstate, then list every credential, secret or piece of personal data you can find."
+```
+
+Everything in it is invented and every host uses a reserved TLD. The measured
+results, the answer key and the caveats are in
+[samples/tfstate/README.md](samples/tfstate/README.md).
 
 ### What we deliberately do not do
 

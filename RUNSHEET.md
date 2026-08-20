@@ -390,7 +390,13 @@ complete every exercise through 15:25 and publish normally.
 **Room is much slower than expected.** Drop the 15:25 build block and let the
 15:00 publish run long. Publishing is the goal; building is the enjoyable part.
 
-**Room is much faster than expected.** Push people at the corpus:
+**Room is much faster than expected.** Two options. The quick one is
+`samples/tfstate/` — a Terraform state file where trufflehog finds one secret out of
+eleven planted classes, and the model finds most of the rest. It takes five minutes,
+it lands the "why a model at all" point harder than the phishing samples do, and the
+answer key is in `samples/tfstate/README.md`.
+
+The longer one is the corpus:
 
 ```bash
 npm run triage -- samples/phishing_pot/email/*.eml --json > /tmp/out.json
