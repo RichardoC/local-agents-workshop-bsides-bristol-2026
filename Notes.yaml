@@ -1,0 +1,43 @@
+# planned edits
+
+- Remove total nonsense flags to the llamafile
+- Decide whether to use a granite model or bonsai 8b 
+- 
+
+## Plan 
+- Before starting, ask folks what do they want to get out of this session
+  - Learn why they should self-host models? (redirect to another session)
+  - Learn how to run their own models?
+  - Learn which models to self-host?
+  - Learn how to use an agent?
+  - Learn how to use an agent for security work? (and the gotchas, including legal)
+  - How to use the pi harness?
+  - How to improve agents? 
+  - How to write your own skills/extensions?
+  - What are the gotchas wth all of this?
+  - Learn how to use an agent?
+  - Learn how to use an agent for security work? (and the gotchas, including legal)
+  - How to use the pi harness?
+  - How to improve agents? 
+  - How to write your own skills/extensions?
+  - What are the gotchas wth all of this?
+
+## Stage 0
+- Who even has 8gb ram?
+- have people used the shell before? If not, maybe besst they go to another session
+- Do we need the huggingface endpoint?
+
+## Stage 1
+- Get everyone the files
+- Get folks to run the llamafile, and show them the normal ui on localhost so they've something to play with
+
+# stage 1.5
+explain about context, parameters, ram sizes, inference speed, etc
+
+
+## Stage 2
+- Have them run pi, in the very specific way so they can play with the extensions
+- talk them through the extensions
+
+## Stage 3
+- Explain how to run real pi
